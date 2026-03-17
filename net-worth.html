@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Net Worth Tracker — Finance Toolkit</title>
+  <link rel="stylesheet" href="shared.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    .nw-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    @media (max-width: 640px) { .nw-grid { grid-template-columns: 1fr; } }
+    .nw-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+    .nw-panel.assets { border-top: 3px solid var(--green); }
+    .nw-panel.liabilities { border-top: 3px solid var(--red); }
+    .line-item { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .line-item label { font-size: 12px; color: var(--muted); flex: 1 1 140px; }
+    .line-item .input-wrap { flex: 1 1 120px; }
+    .line-item .remove-btn { flex-shrink: 0; }
+    .add-btn-small { background: none; border: 1px dashed var(--border); border-radius: 6px; color: var(--muted); cursor: pointer; font-size: 12px; font-family: 'DM Sans', sans-serif; padding: 6px 12px; transition: all 0.15s; width: 100%; margin-top: 4px; }
+    .add-btn-small:hover { border-color: var(--blue); color: var(--blue); }
+  </style>
+</head>
+<body>
+<nav class="tool-nav"><a href="index.html" class="nav-back">&#8592; Finance Toolkit</a></nav>
+<div class="app">
+  <div class="header-row">
+    <div>
+      <h1>Net Worth Tracker</h1>
+      <p class="subtitle">Track your assets and liabilities. All data is saved to your browser.</p>
+    </div>
+    <div class="header-actions">
+      <button class="reset-btn" id="resetBtn">Reset</button>
+      <div class="save-indicator" id="saveInd"><div class="dot"></div> Saved</div>
+    </div>
+  </div>
+
+  <div class="nw-grid">
+    <div class="nw-panel assets">
+      <div class="section-title" style="color:var(--green)">Assets</div>
+      <div id="assetList"></div>
+      <button class="add-btn-small" id="addAssetBtn">+ Add Asset</button>
+    </div>
+    <div class="nw-panel liabilities">
+      <div class="section-title" style="color:var(--red)">Liabilities</div>
+      <div id="liabilityList"></div>
+      <button class="add-btn-small" id="addLiabilityBtn">+ Add Liability</button>
+    </div>
+  </div>
+
+  <div class="stats" id="statsRow"></div>
+
+  <div class="two-col">
+    <div class="chart-wrap" style="margin-bottom:0"><canvas id="donutChart" height="300"></canvas></div>
+    <div class="chart-wrap" style="margin-bottom:0"><canvas id="barChart" height="300"></canvas></div>
+  </div>
+
+  <p class="footer">All data is stored locally in your browser and never sent to any server.</p>
+</div>
+
+<script>
+const STORAGE_KEY = 'net-worth-v1';
+
+const DEFAULT_ASSETS = [
+  { id: 1, label: 'Primary Home (equity)', value: 400000 },
+  { id: 2, label: 'Super', value: 120000 },
+  { id: 3, label: 'Share Portfolio', value: 50000 },
+  { id: 4, label: 'Offset / Cash', value: 80000 },
+  { id: 5, label: 'Investment Property (equity)', value: 150000 },
+];
+const DEFAULT_LIABILITIES = [
+  { id: 1, label: 'Home Mortgage', value: 600000 },
+  { id: 2, label: 'Investment Loan', value: 400000 },
+  { id: 3, label: 'Car Loan', value: 0 },
+  { id: 4, label: 'Credit Cards', value: 0 },
+];
+
+let assets, liabilities, nextAId, nextLId;
+let donutChart = null, barChart = null;
+let saveTimer = null;
+
+function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ assets, liabilities, nextAId, nextLId }));
+  flashSaved();
+}
+
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; }
+}
+
+function renderList(containerId, items, type) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = items.map((item, idx) => `
+    <div class="line-item">
+      <label><input type="text" class="item-label" value="${item.label}" placeholder="Label" style="padding-left:8px;font-family:'DM Sans',sans-serif;font-size:12px" data-idx="${idx}" data-type="${type}"></label>
+      <div class="input-wrap" style="flex:0 0 130px">
+        <span class="pfx">$</span>
+        <input type="number" class="item-value" value="${item.value}" step="1000" data-idx="${idx}" data-type="${type}">
+      </div>
+      ${items.length > 1 ? `<button class="remove-btn" data-idx="${idx}" data-type="${type}">&times;</button>` : ''}
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.item-label').forEach(el => el.addEventListener('input', e => {
+    const { idx, type: t } = e.target.dataset;
+    (t === 'asset' ? assets : liabilities)[idx].label = e.target.value;
+    saveState(); renderChart();
+  }));
+  container.querySelectorAll('.item-value').forEach(el => el.addEventListener('input', e => {
+    const { idx, type: t } = e.target.dataset;
+    (t === 'asset' ? assets : liabilities)[idx].value = +e.target.value || 0;
+    saveState(); renderChart();
+  }));
+  container.querySelectorAll('.remove-btn').forEach(el => el.addEventListener('click', e => {
+    const { idx, type: t } = e.target.dataset;
+    if (t === 'asset') assets.splice(idx, 1);
+    else liabilities.splice(idx, 1);
+    saveState(); renderList(containerId, t === 'asset' ? assets : liabilities, t); renderChart();
+  }));
+}
+
+function renderChart() {
+  const totalAssets = assets.reduce((s, a) => s + (a.value || 0), 0);
+  const totalLiab = liabilities.reduce((s, l) => s + (l.value || 0), 0);
+  const netWorth = totalAssets - totalLiab;
+
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card" style="border-top-color:var(--green)">
+      <div class="stat-label">Total Assets</div>
+      <div class="stat-value" style="color:var(--green)">$${totalAssets.toLocaleString()}</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--red)">
+      <div class="stat-label">Total Liabilities</div>
+      <div class="stat-value" style="color:var(--red)">$${totalLiab.toLocaleString()}</div>
+    </div>
+    <div class="stat-card" style="border-top-color:${netWorth>=0?'var(--blue)':'var(--red)'}">
+      <div class="stat-label">Net Worth</div>
+      <div class="stat-value" style="color:${netWorth>=0?'var(--blue)':'var(--red)'}">$${netWorth.toLocaleString()}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Debt-to-Asset Ratio</div>
+      <div class="stat-value" style="color:${totalLiab/totalAssets<0.5?'var(--green)':totalLiab/totalAssets<0.8?'var(--gold)':'var(--red)'}">${totalAssets > 0 ? ((totalLiab/totalAssets)*100).toFixed(1) : '0'}%</div>
+    </div>`;
+
+  // Donut: asset breakdown
+  if (donutChart) donutChart.destroy();
+  const assetColors = ['#58a6ff','#3fb950','#e3b341','#bc8cff','#f78166','#79c0ff','#56d364','#ffa657'];
+  donutChart = new Chart(document.getElementById('donutChart'), {
+    type: 'doughnut',
+    data: { labels: assets.map(a => a.label), datasets: [{ data: assets.map(a => a.value), backgroundColor: assetColors.slice(0, assets.length), borderWidth: 0, hoverOffset: 4 }] },
+    options: { responsive: true, animation: false, cutout: '60%', plugins: { legend: { position: 'bottom', labels: { color: '#7d8590', font: { family: 'DM Sans', size: 11 }, padding: 10 } }, tooltip: { backgroundColor: '#0d1117', borderColor: '#21262d', borderWidth: 1, callbacks: { label: c => ' ' + c.label + ': $' + c.parsed.toLocaleString() } } }, title: { display: true, text: 'Asset Breakdown', color: '#7d8590', font: { family: 'DM Sans', size: 12 }, padding: { bottom: 12 } } }
+    }
+  });
+
+  // Bar: assets vs liabilities
+  if (barChart) barChart.destroy();
+  barChart = new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: { labels: ['Assets', 'Liabilities', 'Net Worth'], datasets: [{ data: [totalAssets, totalLiab, Math.max(netWorth, 0)], backgroundColor: ['#3fb950', '#f78166', '#58a6ff'], borderWidth: 0, borderRadius: 4 }] },
+    options: { responsive: true, animation: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#0d1117', borderColor: '#21262d', borderWidth: 1, callbacks: { label: c => ' $' + c.parsed.y.toLocaleString() } }, title: { display: true, text: 'Summary', color: '#7d8590', font: { family: 'DM Sans', size: 12 }, padding: { bottom: 12 } } }, scales: { x: { ticks: { color: '#7d8590', font: { family: 'DM Sans', size: 12 } }, grid: { display: false } }, y: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 }, callback: v => '$' + (v>=1e6?(v/1e6).toFixed(1)+'M':(v/1000).toFixed(0)+'k') }, grid: { color: '#21262d' } } } }
+    }
+  });
+}
+
+function init() {
+  renderList('assetList', assets, 'asset');
+  renderList('liabilityList', liabilities, 'liability');
+  renderChart();
+}
+
+document.getElementById('addAssetBtn').addEventListener('click', () => {
+  assets.push({ id: nextAId++, label: 'Asset', value: 0 });
+  saveState(); renderList('assetList', assets, 'asset'); renderChart();
+});
+document.getElementById('addLiabilityBtn').addEventListener('click', () => {
+  liabilities.push({ id: nextLId++, label: 'Liability', value: 0 });
+  saveState(); renderList('liabilityList', liabilities, 'liability'); renderChart();
+});
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (!confirm('Reset to defaults?')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  assets = JSON.parse(JSON.stringify(DEFAULT_ASSETS));
+  liabilities = JSON.parse(JSON.stringify(DEFAULT_LIABILITIES));
+  nextAId = DEFAULT_ASSETS.length + 1; nextLId = DEFAULT_LIABILITIES.length + 1;
+  init();
+});
+
+const saved = loadState();
+if (saved) { assets = saved.assets; liabilities = saved.liabilities; nextAId = saved.nextAId; nextLId = saved.nextLId; }
+else { assets = JSON.parse(JSON.stringify(DEFAULT_ASSETS)); liabilities = JSON.parse(JSON.stringify(DEFAULT_LIABILITIES)); nextAId = DEFAULT_ASSETS.length + 1; nextLId = DEFAULT_LIABILITIES.length + 1; }
+init();
+</script>
+</body>
+</html>

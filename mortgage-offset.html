@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mortgage Offset Calculator</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:       #080c10;
+      --surface:  #0d1117;
+      --surface2: #161b22;
+      --border:   #21262d;
+      --text:     #e6edf3;
+      --muted:    #7d8590;
+      --subtle:   #30363d;
+      --gold:     #d29922;
+    }
+    html, body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+    #app { max-width: 1080px; margin: 0 auto; padding: 40px 20px 80px; }
+
+    .header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; }
+    .header-row h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.5px; margin-bottom: 4px; }
+    .header-row .subtitle { font-size: 14px; color: var(--muted); }
+    .header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-top: 4px; }
+    @media (max-width: 540px) { .header-row { flex-direction: column; align-items: flex-start; gap: 12px; } .header-actions { width: 100%; justify-content: flex-start; } }
+    .save-indicator {
+      font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 5px;
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .save-indicator.show { opacity: 1; }
+    .save-indicator .dot { width: 6px; height: 6px; border-radius: 50%; background: #3fb950; }
+    .reset-btn {
+      background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px;
+      cursor: pointer; font-size: 12px; font-family: 'DM Sans', sans-serif;
+      padding: 6px 12px; transition: all 0.15s; white-space: nowrap;
+    }
+    .reset-btn:hover { border-color: #f78166; color: #f78166; }
+
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px; margin-bottom: 20px; }
+    .section-title { font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+    .sep { height: 1px; background: var(--border); margin: 18px 0; }
+
+    .input-grid { display: flex; gap: 14px; flex-wrap: wrap; }
+    .input-group { flex: 1 1 150px; }
+    .input-group label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+    .input-wrap { position: relative; }
+    .pfx { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-family: 'DM Mono', monospace; font-size: 12px; pointer-events: none; }
+    input[type=number], input[type=text] {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px;
+      padding: 8px 10px 8px 22px; outline: none; transition: border-color 0.15s;
+      -moz-appearance: textfield;
+    }
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+    input[type=number]:focus, input[type=text]:focus { border-color: #58a6ff; }
+
+    .list-row {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+      padding: 12px 14px; margin-bottom: 10px; border-left: 3px solid var(--border);
+    }
+    .list-row .row-icon { font-size: 14px; flex-shrink: 0; width: 20px; text-align: center; }
+    .list-row .field-wrap { display: flex; flex-direction: column; }
+    .list-row .field-wrap label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+    .list-row .field-label { flex: 1 1 150px; }
+    .list-row .field-label input[type=text] { padding-left: 10px; }
+    .list-row .field-amount { flex: 0 0 150px; }
+    .list-row .field-month { flex: 0 0 120px; }
+
+    .vis-toggle input[type=checkbox] { display: none; }
+    .vis-toggle label {
+      display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; color: var(--muted);
+      padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface);
+      transition: all 0.15s; white-space: nowrap;
+    }
+    .vis-toggle input:checked + label { color: var(--text); border-color: var(--subtle); }
+
+    .remove-btn {
+      background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 4px;
+      cursor: pointer; font-size: 16px; line-height: 1; padding: 4px 8px; transition: all 0.15s; flex-shrink: 0; margin-left: auto;
+    }
+    .remove-btn:hover { border-color: #f78166; color: #f78166; }
+    .add-btn {
+      display: flex; align-items: center; gap: 8px; background: none;
+      border: 1px dashed var(--border); border-radius: 8px; color: var(--muted);
+      cursor: pointer; font-size: 13px; font-family: 'DM Sans', sans-serif;
+      padding: 10px 16px; width: 100%; transition: all 0.15s; margin-top: 4px;
+    }
+    .add-btn:hover { border-color: #58a6ff; color: #58a6ff; }
+
+    .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+    .stat-card { flex: 1 1 160px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; border-top: 2px solid var(--border); }
+    .stat-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+    .stat-value { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; }
+
+    .chart-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+
+    .table-scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    thead tr { border-bottom: 2px solid var(--border); }
+    th { padding: 10px 14px; color: var(--muted); font-weight: 500; text-align: right; white-space: nowrap; font-size: 11px; letter-spacing: 0.3px; }
+    td { padding: 9px 14px; text-align: right; color: var(--text); font-family: 'DM Mono', monospace; border-bottom: 1px solid var(--border); }
+    tr.windfall-row { background: rgba(210,153,34,0.06); }
+    tr.windfall-row td { color: var(--gold); }
+    tr.loan-done-row td { color: #3fb950; }
+    tr:last-child td { border-bottom: none; }
+
+    .footer { margin-top: 24px; font-size: 11px; color: var(--subtle); text-align: center; }
+
+    .tool-nav { padding: 16px 20px 0; max-width: 1080px; margin: 0 auto; }
+    .nav-back { color: var(--muted); font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: color 0.15s; }
+    .nav-back:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+<nav class="tool-nav"><a href="index.html" class="nav-back">&#8592; Finance Toolkit</a></nav>
+<div id="app">
+  <div class="header-row">
+    <div>
+      <h1>Mortgage Offset Calculator</h1>
+      <p class="subtitle">Model how offset contributions and lump-sum windfalls accelerate your mortgage payoff.</p>
+    </div>
+    <div class="header-actions">
+      <button class="reset-btn" id="resetBtn">Reset to defaults</button>
+      <div class="save-indicator" id="saveIndicator">
+        <div class="dot"></div> Saved
+      </div>
+    </div>
+  </div>
+
+  <!-- LOAN INPUTS -->
+  <div class="panel">
+    <div class="section-title">Loan Details</div>
+    <div class="input-grid">
+      <div class="input-group"><label>Loan Balance</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="loanBal" step="5000"></div></div>
+      <div class="input-group"><label>Offset Balance</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="offsetBal" step="5000"></div></div>
+      <div class="input-group"><label>Interest Rate</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="rate" step="0.05"></div></div>
+      <div class="input-group"><label>Weekly Repayment</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="weeklyRepay" step="50"></div></div>
+    </div>
+  </div>
+
+  <!-- WINDFALLS -->
+  <div class="panel">
+    <div class="section-title">Windfalls — Lump Sums Added to Offset</div>
+    <div id="windfallList"></div>
+    <button class="add-btn" id="addWindfallBtn">
+      <span style="font-size:18px;line-height:1">+</span> Add Windfall
+    </button>
+  </div>
+
+  <!-- SCENARIOS -->
+  <div class="panel">
+    <div class="section-title">Scenarios — Monthly Offset Additions</div>
+    <div id="scenarioList"></div>
+    <button class="add-btn" id="addScenarioBtn">
+      <span style="font-size:18px;line-height:1">+</span> Add Scenario
+    </button>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats" id="statsRow"></div>
+
+  <!-- CHART -->
+  <div class="chart-wrap">
+    <canvas id="myChart" height="280"></canvas>
+  </div>
+
+  <!-- TABLE -->
+  <div class="panel" style="padding:0;overflow:hidden;">
+    <div class="table-scroll">
+      <table>
+        <thead><tr id="tableHead"></tr></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="footer">Figures are approximate. Once effective balance reaches $0, surplus offset earns nothing — consider redirecting to investments.</p>
+</div>
+
+<script>
+// ─── palette ──────────────────────────────────────────────────────────────────
+const PALETTE = [
+  '#58a6ff', '#3fb950', '#e3b341', '#f78166', '#bc8cff',
+  '#79c0ff', '#56d364', '#ffa657', '#ff7b72', '#d2a8ff'
+];
+function colorFor(idx) { return PALETTE[idx % PALETTE.length]; }
+
+// ─── defaults ─────────────────────────────────────────────────────────────────
+const DEFAULTS = {
+  loan: 750000,
+  offset: 80000,
+  rate: 6.00,
+  weeklyRepay: 900,
+  windfalls: [
+    { id: 1, label: 'Bonus / gift', amount: 20000, month: 3 },
+  ],
+  scenarios: [
+    { id: 1, label: 'Conservative', amount: 2000,  visible: true },
+    { id: 2, label: 'Aggressive',   amount: 5000,  visible: true },
+  ],
+};
+
+// ─── state ────────────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'mortgage-calc-v1';
+let windfalls, scenarios, nextWId, nextSId;
+
+// ─── localStorage helpers ─────────────────────────────────────────────────────
+function saveState() {
+  const state = {
+    loan:        +document.getElementById('loanBal').value    || 0,
+    offset:      +document.getElementById('offsetBal').value  || 0,
+    rate:        +document.getElementById('rate').value       || 0,
+    weeklyRepay: +document.getElementById('weeklyRepay').value|| 0,
+    windfalls,
+    scenarios,
+    nextWId,
+    nextSId,
+  };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    flashSaved();
+  } catch (e) { /* storage full or unavailable */ }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { /* corrupt data */ }
+  return null;
+}
+
+function applyState(state) {
+  document.getElementById('loanBal').value    = state.loan;
+  document.getElementById('offsetBal').value  = state.offset;
+  document.getElementById('rate').value       = state.rate;
+  document.getElementById('weeklyRepay').value = state.weeklyRepay;
+  windfalls = state.windfalls;
+  scenarios = state.scenarios;
+  nextWId   = state.nextWId   ?? (Math.max(0, ...windfalls.map(w => w.id))  + 1);
+  nextSId   = state.nextSId   ?? (Math.max(0, ...scenarios.map(s => s.id))  + 1);
+}
+
+let saveFlashTimer = null;
+function flashSaved() {
+  const el = document.getElementById('saveIndicator');
+  el.classList.add('show');
+  clearTimeout(saveFlashTimer);
+  saveFlashTimer = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+function fmtK(v) { return '$' + (v / 1000).toFixed(1) + 'k'; }
+
+function monthLabel(m) {
+  const d = new Date(2026, 2 + m, 1);
+  return d.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
+}
+
+function getInputs() {
+  return {
+    loan:        +document.getElementById('loanBal').value    || 0,
+    offset:      +document.getElementById('offsetBal').value  || 0,
+    rate:        +document.getElementById('rate').value       || 0,
+    weeklyRepay: +document.getElementById('weeklyRepay').value|| 0,
+  };
+}
+
+function generateData(loan, offsetStart, rateAnnual, repayWeekly, monthlyAdd, wfList) {
+  const data = [];
+  let lb = loan, off = offsetStart;
+  const rm = rateAnnual / 100 / 12;
+  const repayM = (repayWeekly * 52) / 12;
+  for (let m = 0; m <= 600; m++) {
+    wfList.forEach(wf => { if (wf.amount > 0 && wf.month === m) off += wf.amount; });
+    const eff = Math.max(lb - off, 0);
+    data.push({ month: m, loan: Math.round(lb), offset: Math.round(off), effective: Math.round(eff) });
+    if (lb <= 0) break;
+    const interest = eff * rm;
+    const principal = Math.min(repayM - interest, lb);
+    lb = Math.max(lb - principal, 0);
+    off = Math.min(off + monthlyAdd, lb + monthlyAdd);
+  }
+  return data;
+}
+
+// ─── render windfall list ─────────────────────────────────────────────────────
+function renderWindfallList() {
+  const list = document.getElementById('windfallList');
+  if (windfalls.length === 0) {
+    list.innerHTML = '<p style="font-size:12px;color:var(--muted);padding:8px 0 4px">No windfalls added.</p>';
+    return;
+  }
+  list.innerHTML = windfalls.map((w, idx) => `
+    <div class="list-row" style="border-left-color:var(--gold)" data-widx="${idx}">
+      <div class="row-icon">&#9889;</div>
+      <div class="field-wrap field-label">
+        <label>Label</label>
+        <input type="text" class="wf-label" value="${w.label}" placeholder="e.g. Tax return">
+      </div>
+      <div class="field-wrap field-amount">
+        <label>Amount</label>
+        <div class="input-wrap"><span class="pfx">$</span>
+          <input type="number" class="wf-amount" value="${w.amount}" step="5000" min="0">
+        </div>
+      </div>
+      <div class="field-wrap field-month">
+        <label>At Month #</label>
+        <div class="input-wrap"><span class="pfx">#</span>
+          <input type="number" class="wf-month" value="${w.month}" step="1" min="0">
+        </div>
+      </div>
+      <button class="remove-btn" title="Remove windfall">&times;</button>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.list-row').forEach((row, idx) => {
+    row.querySelector('.wf-label').addEventListener('input',  e => { windfalls[idx].label  = e.target.value;     saveState(); render(); });
+    row.querySelector('.wf-amount').addEventListener('input', e => { windfalls[idx].amount = +e.target.value||0; saveState(); render(); });
+    row.querySelector('.wf-month').addEventListener('input',  e => { windfalls[idx].month  = +e.target.value||0; saveState(); render(); });
+    row.querySelector('.remove-btn').addEventListener('click', () => {
+      windfalls.splice(idx, 1); saveState(); renderWindfallList(); render();
+    });
+  });
+}
+
+// ─── render scenario list ─────────────────────────────────────────────────────
+function renderScenarioList() {
+  const list = document.getElementById('scenarioList');
+  list.innerHTML = scenarios.map((s, idx) => {
+    const color = colorFor(idx);
+    return `
+      <div class="list-row" style="border-left-color:${color}" data-sidx="${idx}">
+        <div class="row-icon" style="color:${color}">&#9632;</div>
+        <div class="field-wrap field-label">
+          <label>Label</label>
+          <input type="text" class="sc-label" value="${s.label}" placeholder="Scenario name">
+        </div>
+        <div class="field-wrap field-amount">
+          <label>Monthly addition</label>
+          <div class="input-wrap"><span class="pfx">$</span>
+            <input type="number" class="sc-amount" value="${s.amount}" step="500" min="0">
+          </div>
+        </div>
+        <div class="vis-toggle">
+          <input type="checkbox" id="vis-${s.id}" class="sc-vis" ${s.visible ? 'checked' : ''}>
+          <label for="vis-${s.id}">${s.visible ? 'Visible' : 'Hidden'}</label>
+        </div>
+        ${scenarios.length > 1 ? '<button class="remove-btn" title="Remove scenario">&times;</button>' : ''}
+      </div>
+    `;
+  }).join('');
+
+  list.querySelectorAll('.list-row').forEach((row, idx) => {
+    row.querySelector('.sc-label').addEventListener('input',  e => { scenarios[idx].label  = e.target.value;     saveState(); render(); });
+    row.querySelector('.sc-amount').addEventListener('input', e => { scenarios[idx].amount = +e.target.value||0; saveState(); render(); });
+    const visCheck = row.querySelector('.sc-vis');
+    if (visCheck) {
+      visCheck.addEventListener('change', e => {
+        scenarios[idx].visible = e.target.checked;
+        e.target.nextElementSibling.textContent = e.target.checked ? 'Visible' : 'Hidden';
+        saveState(); render();
+      });
+    }
+    const rmBtn = row.querySelector('.remove-btn');
+    if (rmBtn) rmBtn.addEventListener('click', () => {
+      scenarios.splice(idx, 1); saveState(); renderScenarioList(); render();
+    });
+  });
+}
+
+// ─── chart instance ───────────────────────────────────────────────────────────
+let chart = null;
+
+// ─── main render ──────────────────────────────────────────────────────────────
+function render() {
+  const { loan, offset, rate, weeklyRepay } = getInputs();
+  const allData = scenarios.map(s => generateData(loan, offset, rate, weeklyRepay, s.amount, windfalls));
+
+  let maxMonth = 60;
+  allData.forEach(d => { const lz = d.find(p => p.loan === 0); if (lz) maxMonth = Math.max(maxMonth, lz.month); });
+
+  const wfMonths = new Set(windfalls.filter(w => w.amount > 0).map(w => w.month));
+  const base = [0, 6, 12, 18, 24, 36, 48, 60, 84, 120, 180, 240];
+  const wfMilestones = windfalls.filter(w => w.amount > 0).map(w => w.month);
+  const tail = maxMonth > 0 ? [maxMonth - 2, maxMonth - 1, maxMonth] : [];
+  const milestones = [...new Set([...base, ...wfMilestones, ...tail])]
+    .filter(m => m >= 0 && m <= maxMonth + 1).sort((a,b) => a-b);
+
+  // ── stat cards ──
+  const effNow = Math.max(loan - offset, 0);
+  let statsHtml = `<div class="stat-card">
+    <div class="stat-label">Effective balance today</div>
+    <div class="stat-value" style="color:#e6edf3">${fmtK(effNow)}</div>
+  </div>`;
+
+  if (windfalls.length > 0) {
+    const totalWf = windfalls.reduce((s, w) => s + (w.amount || 0), 0);
+    statsHtml += `<div class="stat-card" style="border-top-color:var(--gold)">
+      <div class="stat-label" style="color:var(--gold)">Total windfalls</div>
+      <div class="stat-value" style="color:var(--gold)">${fmtK(totalWf)}</div>
+      <div class="stat-value" style="font-size:11px;color:var(--muted);margin-top:4px">${windfalls.length} lump sum${windfalls.length > 1 ? 's' : ''}</div>
+    </div>`;
+  }
+
+  scenarios.forEach((s, idx) => {
+    const color = colorFor(idx);
+    const d = allData[idx];
+    const ez = d.find(p => p.effective === 0);
+    const lz = d.find(p => p.loan === 0);
+    statsHtml += `<div class="stat-card" style="border-top-color:${color}">
+      <div class="stat-label" style="color:${color}">${s.label || 'Scenario ' + (idx+1)}</div>
+      <div class="stat-value" style="color:${color};font-size:11px;margin-bottom:4px">
+        Eff.$0: ${ez ? 'Mo.' + ez.month + ' &middot; ' + monthLabel(ez.month) : '&mdash;'}
+      </div>
+      <div class="stat-value" style="font-size:11px;color:var(--muted)">
+        Loan $0: ${lz ? 'Mo.' + lz.month + ' &middot; ' + monthLabel(lz.month) : '&mdash;'}
+      </div>
+    </div>`;
+  });
+  document.getElementById('statsRow').innerHTML = statsHtml;
+
+  // ── chart ──
+  const labels = Array.from({ length: maxMonth + 1 }, (_, i) => i);
+  const datasets = [{
+    label: 'Loan Balance',
+    data: labels.map(m => allData[0][m] ? allData[0][m].loan : null),
+    borderColor: '#f78166', borderWidth: 2, borderDash: [6,3], pointRadius: 0, tension: 0.3,
+  }];
+  scenarios.forEach((s, idx) => {
+    if (!s.visible) return;
+    const color = colorFor(idx);
+    const d = allData[idx];
+    const lbl = s.label || ('Scenario ' + (idx+1));
+    datasets.push({ label: lbl + ' – Offset',    data: labels.map(m => d[m] ? d[m].offset    : null), borderColor: color, borderWidth: 1,   borderDash: [3,3], pointRadius: 0, tension: 0.3 });
+    datasets.push({ label: lbl + ' – Effective', data: labels.map(m => d[m] ? d[m].effective : null), borderColor: color, borderWidth: 2.5,                    pointRadius: 0, tension: 0.3 });
+  });
+
+  const config = {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#7d8590', font: { family: 'DM Sans', size: 12 }, boxWidth: 20, padding: 14 } },
+        tooltip: {
+          backgroundColor: '#0d1117', borderColor: '#21262d', borderWidth: 1,
+          titleColor: '#7d8590', bodyColor: '#e6edf3',
+          titleFont: { family: 'DM Mono', size: 11 }, bodyFont: { family: 'DM Mono', size: 12 },
+          callbacks: {
+            title: ctx => {
+              const m = ctx[0].parsed.x;
+              const wfsHere = windfalls.filter(w => w.amount > 0 && w.month === m);
+              const base = monthLabel(m) + ' (Mo.' + m + ')';
+              if (wfsHere.length) return base + '  \u26a1 ' + wfsHere.map(w => (w.label || 'Windfall') + ' +' + fmtK(w.amount)).join(', ');
+              return base;
+            },
+            label: ctx => ' ' + ctx.dataset.label + ': $' + (ctx.parsed.y / 1000).toFixed(1) + 'k',
+          }
+        },
+      },
+      scales: {
+        x: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 }, maxTicksLimit: 20 }, grid: { color: '#21262d' }, title: { display: true, text: 'Months from March 2026', color: '#7d8590', font: { size: 11 } } },
+        y: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 }, callback: v => '$' + (v/1000).toFixed(0) + 'k' }, grid: { color: '#21262d' } }
+      }
+    }
+  };
+
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('myChart'), config);
+
+  // ── table ──
+  document.getElementById('tableHead').innerHTML =
+    '<th>Mo.</th><th>Date</th><th>Loan</th>' +
+    scenarios.map((s, idx) => {
+      const c = colorFor(idx), lbl = s.label || ('Scenario ' + (idx+1));
+      return `<th style="color:${c}">${lbl}<br><span style="font-weight:400;color:var(--muted)">Offset</span></th>` +
+             `<th style="color:${c}">${lbl}<br><span style="font-weight:400;color:var(--muted)">Effective</span></th>`;
+    }).join('');
+
+  document.getElementById('tableBody').innerHTML = milestones.map(m => {
+    const dFirst = allData[0][m];
+    if (!dFirst) return '';
+    const isW = wfMonths.has(m), isDone = dFirst.loan === 0;
+    const wfsHere = windfalls.filter(w => w.amount > 0 && w.month === m);
+    const wfBadge = wfsHere.length ? ' <span style="color:var(--gold);font-size:10px">&#9889; ' + wfsHere.map(w => fmtK(w.amount)).join('+') + '</span>' : '';
+
+    let tds = `<td style="color:var(--muted)">${m}${wfsHere.length ? ' &#9889;' : ''}</td>` +
+              `<td style="color:var(--muted)">${monthLabel(m)}${wfBadge}</td>` +
+              `<td style="font-weight:${isDone?600:400}">${isDone ? '&#10003; $0' : fmtK(dFirst.loan)}</td>`;
+
+    scenarios.forEach((s, idx) => {
+      const d = allData[idx][m], color = colorFor(idx);
+      if (!d) { tds += '<td>&mdash;</td><td>&mdash;</td>'; return; }
+      const effDone = d.effective === 0;
+      tds += `<td>${fmtK(d.offset)}</td>`;
+      tds += `<td style="color:${effDone ? color : 'var(--text)'};font-weight:${effDone?600:400}">${effDone ? '&#10003; $0' : fmtK(d.effective)}</td>`;
+    });
+    return `<tr class="${isDone ? 'loan-done-row' : isW ? 'windfall-row' : ''}">${tds}</tr>`;
+  }).join('');
+}
+
+// ─── wire up static loan inputs ───────────────────────────────────────────────
+document.querySelectorAll('#app > .panel input[id]').forEach(el => {
+  el.addEventListener('input', () => { saveState(); render(); });
+});
+
+document.getElementById('addWindfallBtn').addEventListener('click', () => {
+  const lastMonth = windfalls.length ? windfalls[windfalls.length-1].month + 12 : 6;
+  windfalls.push({ id: nextWId++, label: 'Windfall ' + (windfalls.length + 1), amount: 10000, month: lastMonth });
+  saveState(); renderWindfallList(); render();
+});
+
+document.getElementById('addScenarioBtn').addEventListener('click', () => {
+  const amounts = [1000, 2000, 3000, 5000, 7500, 10000, 15000, 20000];
+  const nextAmount = amounts[scenarios.length] ?? (scenarios[scenarios.length-1].amount + 5000);
+  scenarios.push({ id: nextSId++, label: 'Scenario ' + (scenarios.length + 1), amount: nextAmount, visible: true });
+  saveState(); renderScenarioList(); render();
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (!confirm('Reset all inputs to defaults? This will clear your saved session.')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  applyState(JSON.parse(JSON.stringify(DEFAULTS)));
+  renderWindfallList(); renderScenarioList(); render();
+});
+
+// ─── init — load saved state or defaults ──────────────────────────────────────
+const saved = loadState();
+applyState(saved ? saved : JSON.parse(JSON.stringify(DEFAULTS)));
+renderWindfallList();
+renderScenarioList();
+render();
+</script>
+</body>
+</html>

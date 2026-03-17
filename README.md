@@ -56,3 +56,19 @@ To enable GitHub Pages on a new fork:
 ## License
 
 MIT
+
+## Tools
+
+| Tool | Description |
+|------|-------------|
+| [Mortgage Offset Calculator](mortgage-offset.html) | Offset contributions, windfalls, multiple scenarios |
+| [Loan Comparison](loan-comparison.html) | Side-by-side mortgage comparison |
+| [Property Cash Flow](property-cashflow.html) | Investment property yield and negative gearing |
+| [Stamp Duty](stamp-duty.html) | All Australian states, FHB concessions |
+| [Rent vs. Buy](rent-vs-buy.html) | Break-even analysis with opportunity cost |
+| [Borrowing Capacity](borrowing-capacity.html) | Max loan estimate with APRA buffer |
+| [Offset vs. Invest](offset-vs-invest.html) | Offset vs. market returns after tax |
+| [Compound Growth](compound-growth.html) | Lump sum + contributions with tax toggle |
+| [Net Worth Tracker](net-worth.html) | Assets vs. liabilities dashboard |
+| [FIRE Timeline](fire-timeline.html) | Path to financial independence |
+| [Salary & Tax Optimiser](salary-tax.html) | Take-home pay, super, salary sacrifice |

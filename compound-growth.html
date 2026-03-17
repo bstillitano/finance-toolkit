@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Compound Growth — Finance Toolkit</title>
+  <link rel="stylesheet" href="shared.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<nav class="tool-nav"><a href="index.html" class="nav-back">&#8592; Finance Toolkit</a></nav>
+<div class="app">
+  <div class="header-row">
+    <div>
+      <h1>Compound Growth Calculator</h1>
+      <p class="subtitle">Model lump sum and regular contributions compounding over time, with or without super tax treatment.</p>
+    </div>
+    <div class="header-actions">
+      <button class="reset-btn" id="resetBtn">Reset</button>
+      <div class="save-indicator" id="saveInd"><div class="dot"></div> Saved</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="input-grid">
+      <div class="input-group"><label>Initial Lump Sum</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="lumpSum" value="50000" step="5000"></div></div>
+      <div class="input-group"><label>Monthly Contribution</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="monthly" value="2000" step="100"></div></div>
+      <div class="input-group"><label>Annual Return (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="returnRate" value="8.00" step="0.5"></div></div>
+      <div class="input-group"><label>Years</label><div class="input-wrap"><span class="pfx">yr</span><input type="number" id="years" value="20" step="1" min="1" max="50"></div></div>
+      <div class="input-group"><label>Tax Treatment</label><div class="input-wrap" style="padding-left:0"><select id="taxType" style="padding-left:10px">
+        <option value="none">No tax (or pre-tax return)</option>
+        <option value="super">Super (15% on earnings)</option>
+        <option value="income">Income (taxed at marginal rate)</option>
+        <option value="cgt">Capital growth (50% CGT discount)</option>
+      </select></div></div>
+      <div class="input-group"><label>Marginal Tax Rate (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="taxRate" value="37" step="1" min="0" max="47"></div></div>
+    </div>
+  </div>
+
+  <div class="stats" id="statsRow"></div>
+  <div class="chart-wrap"><canvas id="myChart" height="280"></canvas></div>
+
+  <div class="panel" style="padding:0;overflow:hidden">
+    <div class="table-scroll">
+      <table><thead><tr><th>Year</th><th>Total Contributed</th><th>Balance</th><th>Total Growth</th><th>Growth %</th></tr></thead>
+      <tbody id="tableBody"></tbody></table>
+    </div>
+  </div>
+  <p class="footer">Returns are not guaranteed. Past performance is not indicative of future results.</p>
+</div>
+
+<script>
+const STORAGE_KEY = 'compound-growth-v1';
+const IDS = ['lumpSum','monthly','returnRate','years','taxType','taxRate'];
+const DEFAULTS = { lumpSum: 50000, monthly: 2000, returnRate: 8, years: 20, taxType: 'none', taxRate: 37 };
+
+let saveTimer = null;
+function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
+function save() { const s = {}; IDS.forEach(id => s[id] = document.getElementById(id).value); localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); flashSaved(); }
+function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } }
+function applyState(s) { IDS.forEach(id => { if (s[id] !== undefined) document.getElementById(id).value = s[id]; }); }
+function g(id) { return +document.getElementById(id).value || 0; }
+function gs(id) { return document.getElementById(id).value; }
+
+function afterTaxRate(grossRate, taxType, marginal) {
+  const r = grossRate / 100;
+  const t = marginal / 100;
+  switch (taxType) {
+    case 'none':   return r;
+    case 'super':  return r * (1 - 0.15);
+    case 'income': return r * (1 - t);
+    case 'cgt':    return r * (1 - t * 0.5);
+  }
+}
+
+let chart = null;
+
+function render() {
+  const lump = g('lumpSum');
+  const mth = g('monthly');
+  const rate = afterTaxRate(g('returnRate'), gs('taxType'), g('taxRate'));
+  const rateM = rate / 12;
+  const yrs = Math.round(g('years'));
+
+  const balances = [], contribs = [];
+  let bal = lump, contrib = lump;
+  balances.push(bal); contribs.push(contrib);
+  for (let m = 1; m <= yrs * 12; m++) {
+    bal = bal * (1 + rateM) + mth;
+    contrib = lump + mth * m;
+    if (m % 12 === 0) { balances.push(Math.round(bal)); contribs.push(Math.round(contrib)); }
+  }
+
+  const finalBal = balances[yrs];
+  const totalContrib = contribs[yrs];
+  const totalGrowth = finalBal - totalContrib;
+
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card" style="border-top-color:var(--blue)">
+      <div class="stat-label">Final Balance</div>
+      <div class="stat-value" style="color:var(--blue)">$${finalBal.toLocaleString()}</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--muted)">
+      <div class="stat-label">Total Contributed</div>
+      <div class="stat-value">$${totalContrib.toLocaleString()}</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--green)">
+      <div class="stat-label">Total Growth</div>
+      <div class="stat-value" style="color:var(--green)">$${totalGrowth.toLocaleString()}</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--gold)">
+      <div class="stat-label">Growth Multiple</div>
+      <div class="stat-value" style="color:var(--gold)">${(finalBal / totalContrib).toFixed(2)}x</div>
+    </div>`;
+
+  const labels = Array.from({length: yrs + 1}, (_, i) => 'Yr ' + i);
+  const cfg = {
+    type: 'line',
+    data: { labels, datasets: [
+      { label: 'Balance', data: balances, borderColor: '#58a6ff', borderWidth: 2.5, pointRadius: 0, tension: 0.3, fill: { target: 1, above: 'rgba(88,166,255,0.08)' } },
+      { label: 'Contributions', data: contribs, borderColor: '#30363d', borderWidth: 1.5, borderDash: [4,3], pointRadius: 0, tension: 0.3 },
+    ]},
+    options: {
+      responsive: true, animation: false, interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#7d8590', font: { family: 'DM Sans', size: 12 }, boxWidth: 20 } },
+        tooltip: { backgroundColor: '#0d1117', borderColor: '#21262d', borderWidth: 1, titleColor: '#7d8590', bodyColor: '#e6edf3', callbacks: { label: c => ' ' + c.dataset.label + ': $' + c.parsed.y.toLocaleString() } }
+      },
+      scales: {
+        x: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 } }, grid: { color: '#21262d' } },
+        y: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 }, callback: v => '$' + (v >= 1000000 ? (v/1000000).toFixed(1)+'M' : (v/1000).toFixed(0)+'k') }, grid: { color: '#21262d' } }
+      }
+    }
+  };
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('myChart'), cfg);
+
+  const tableYears = [1,2,3,5,7,10,15,20,25,30].filter(y => y <= yrs);
+  if (!tableYears.includes(yrs)) tableYears.push(yrs);
+  document.getElementById('tableBody').innerHTML = tableYears.map(y => {
+    const b = balances[y], c = contribs[y], g2 = b - c;
+    return `<tr><td>${y}</td><td>$${c.toLocaleString()}</td><td style="color:var(--blue);font-weight:600">$${b.toLocaleString()}</td><td style="color:var(--green)">$${g2.toLocaleString()}</td><td style="color:var(--green)">${((g2/c)*100).toFixed(1)}%</td></tr>`;
+  }).join('');
+}
+
+IDS.forEach(id => document.getElementById(id).addEventListener('input', () => { save(); render(); }));
+document.getElementById('resetBtn').addEventListener('click', () => { if (!confirm('Reset?')) return; localStorage.removeItem(STORAGE_KEY); applyState(DEFAULTS); render(); });
+applyState(load() || DEFAULTS); render();
+</script>
+</body>
+</html>

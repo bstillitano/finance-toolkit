@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Salary &amp; Tax Optimiser — Finance Toolkit</title>
+  <link rel="stylesheet" href="shared.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<nav class="tool-nav"><a href="index.html" class="nav-back">&#8592; Finance Toolkit</a></nav>
+<div class="app">
+  <div class="header-row">
+    <div>
+      <h1>Salary &amp; Tax Optimiser</h1>
+      <p class="subtitle">Model your take-home pay under different super contribution and salary sacrifice strategies. Australian tax rates 2024–25.</p>
+    </div>
+    <div class="header-actions">
+      <button class="reset-btn" id="resetBtn">Reset</button>
+      <div class="save-indicator" id="saveInd"><div class="dot"></div> Saved</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="section-title">Income</div>
+    <div class="input-grid">
+      <div class="input-group"><label>Gross Salary (excl. super)</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="grossSalary" value="120000" step="5000"></div></div>
+      <div class="input-group"><label>Other Taxable Income</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="otherIncome" value="0" step="1000"></div></div>
+      <div class="input-group"><label>Employer Super (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="employerSuper" value="11.5" step="0.5"></div></div>
+    </div>
+    <div class="sep"></div>
+    <div class="section-title">Strategy</div>
+    <div class="input-grid">
+      <div class="input-group"><label>Salary Sacrifice to Super</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="salSacrifice" value="0" step="1000"></div></div>
+      <div class="input-group"><label>Other Pre-tax Deductions</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="preTaxDeductions" value="0" step="500"></div></div>
+    </div>
+    <div class="sep"></div>
+    <div class="section-title">Personal</div>
+    <div class="input-grid">
+      <div class="input-group"><label>Residency</label><select id="residency" style="padding-left:10px"><option value="resident">Australian Resident</option><option value="nonresident">Non-Resident</option></select></div>
+      <div class="input-group"><label>HELP / HECS Debt?</label><select id="helpDebt" style="padding-left:10px"><option value="no">No</option><option value="yes">Yes</option></select></div>
+    </div>
+  </div>
+
+  <div class="stats" id="statsRow"></div>
+
+  <div class="two-col" style="margin-bottom:20px">
+    <div class="panel" style="margin-bottom:0">
+      <div class="section-title">Tax Breakdown</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px"><tbody id="taxBreakdown"></tbody></table>
+    </div>
+    <div class="panel" style="margin-bottom:0">
+      <div class="section-title">Super Breakdown</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px"><tbody id="superBreakdown"></tbody></table>
+    </div>
+  </div>
+
+  <div class="chart-wrap"><canvas id="myChart" height="260"></canvas></div>
+
+  <p class="footer">Based on 2024–25 Australian individual income tax rates. Does not include state taxes or levies.</p>
+</div>
+
+<script>
+const STORAGE_KEY = 'salary-tax-v1';
+const IDS = ['grossSalary','otherIncome','employerSuper','salSacrifice','preTaxDeductions','residency','helpDebt'];
+const DEFAULTS = { grossSalary:120000, otherIncome:0, employerSuper:11.5, salSacrifice:0, preTaxDeductions:0, residency:'resident', helpDebt:'no' };
+
+let saveTimer = null;
+function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
+function save() { const s = {}; IDS.forEach(id => s[id] = document.getElementById(id).value); localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); flashSaved(); }
+function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } }
+function applyState(s) { IDS.forEach(id => { if (s[id] !== undefined) document.getElementById(id).value = s[id]; }); }
+function g(id) { return +document.getElementById(id).value || 0; }
+function gs(id) { return document.getElementById(id).value; }
+
+// 2024-25 resident tax brackets
+function calcIncomeTax(taxableIncome, isResident) {
+  if (!isResident) {
+    // Non-resident: flat rates
+    if (taxableIncome <= 135000) return taxableIncome * 0.32;
+    if (taxableIncome <= 190000) return 43200 + (taxableIncome - 135000) * 0.37;
+    return 63550 + (taxableIncome - 190000) * 0.45;
+  }
+  // Resident 2024-25 (Stage 3 cuts)
+  if (taxableIncome <= 18200) return 0;
+  if (taxableIncome <= 45000) return (taxableIncome - 18200) * 0.19;
+  if (taxableIncome <= 120000) return 5092 + (taxableIncome - 45000) * 0.325;
+  if (taxableIncome <= 180000) return 29467 + (taxableIncome - 120000) * 0.37;
+  return 51667 + (taxableIncome - 180000) * 0.45;
+}
+
+function calcLITO(taxableIncome) {
+  if (taxableIncome <= 37500) return 700;
+  if (taxableIncome <= 45000) return 700 - (taxableIncome - 37500) * 0.05;
+  if (taxableIncome <= 66667) return 325 - (taxableIncome - 45000) * 0.015;
+  return 0;
+}
+
+function calcMedicare(taxableIncome, isResident) {
+  if (!isResident) return 0;
+  if (taxableIncome <= 26000) return 0;
+  if (taxableIncome <= 32500) return (taxableIncome - 26000) * 0.1;
+  return taxableIncome * 0.02;
+}
+
+function calcHELP(taxableIncome) {
+  // 2024-25 repayment rates
+  const brackets = [[54435,0],[62739,0.01],[70092,0.02],[80594,0.025],[95183,0.03],[111142,0.035],[130092,0.04],[150000,0.045],[177960,0.05],[999999,0.1]];
+  for (const [limit, rate] of brackets) { if (taxableIncome <= limit) return taxableIncome * rate; }
+  return taxableIncome * 0.1;
+}
+
+let chart = null;
+
+function calcAll(salary, otherIncome, employerSuperPct, salSacrifice, preTaxDed, isResident, hasHelp) {
+  const employerSuperAmt = salary * (employerSuperPct / 100);
+  const salSacCapped = Math.min(salSacrifice, Math.max(0, 30000 - employerSuperAmt)); // concessional cap 2024-25
+  const taxableIncome = Math.max(0, salary - salSacCapped - preTaxDed + otherIncome);
+
+  const grossTax = calcIncomeTax(taxableIncome, isResident);
+  const lito = isResident ? calcLITO(taxableIncome) : 0;
+  const medicare = calcMedicare(taxableIncome, isResident);
+  const helpRepay = hasHelp ? calcHELP(taxableIncome) : 0;
+  const netTax = Math.max(0, grossTax - lito) + medicare + helpRepay;
+
+  const takeHome = taxableIncome - netTax + (isResident ? 0 : 0);
+  const effectiveRate = taxableIncome > 0 ? (netTax / taxableIncome * 100) : 0;
+  const marginalRate = taxableIncome > 120000 ? 37 : taxableIncome > 45000 ? 32.5 : taxableIncome > 18200 ? 19 : 0;
+
+  const superConcessional = employerSuperAmt + salSacCapped;
+  const superTax = superConcessional * 0.15;
+  const superNet = superConcessional - superTax;
+
+  return { taxableIncome, grossTax, lito, medicare, helpRepay, netTax, takeHome, effectiveRate, marginalRate, employerSuperAmt, salSacCapped, superConcessional, superTax, superNet };
+}
+
+function render() {
+  const salary = g('grossSalary'), otherIncome = g('otherIncome');
+  const empSuper = g('employerSuper'), salSac = g('salSacrifice');
+  const preTax = g('preTaxDeductions');
+  const isResident = gs('residency') === 'resident';
+  const hasHelp = gs('helpDebt') === 'yes';
+
+  const r = calcAll(salary, otherIncome, empSuper, salSac, preTax, isResident, hasHelp);
+  const rBase = calcAll(salary, otherIncome, empSuper, 0, 0, isResident, hasHelp);
+
+  const saving = r.netTax < rBase.netTax ? rBase.netTax - r.netTax : 0;
+
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card" style="border-top-color:var(--green)">
+      <div class="stat-label">Take-home pay</div>
+      <div class="stat-value" style="color:var(--green)">$${r.takeHome.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+      <div class="stat-sub">$${(r.takeHome/52).toLocaleString(undefined,{maximumFractionDigits:0})}/wk · $${(r.takeHome/12).toLocaleString(undefined,{maximumFractionDigits:0})}/mo</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--red)">
+      <div class="stat-label">Total tax payable</div>
+      <div class="stat-value" style="color:var(--red)">$${r.netTax.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+      <div class="stat-sub">Effective rate: ${r.effectiveRate.toFixed(1)}%</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--blue)">
+      <div class="stat-label">Super (total)</div>
+      <div class="stat-value" style="color:var(--blue)">$${r.superNet.toLocaleString(undefined,{maximumFractionDigits:0})} net</div>
+      <div class="stat-sub">After 15% contributions tax</div>
+    </div>
+    ${salSac > 0 ? `<div class="stat-card" style="border-top-color:var(--gold)">
+      <div class="stat-label">Salary sacrifice saving</div>
+      <div class="stat-value" style="color:var(--gold)">$${saving.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+      <div class="stat-sub">vs. no salary sacrifice</div>
+    </div>` : ''}`;
+
+  const fmtRow = (label, val, color, bold) =>
+    `<tr><td style="padding:7px 4px;color:var(--muted);border-bottom:1px solid var(--border)">${label}</td><td style="padding:7px 4px;text-align:right;font-family:'DM Mono',monospace;border-bottom:1px solid var(--border);color:${color||'var(--text)'};font-weight:${bold?600:400}">${val}</td></tr>`;
+
+  document.getElementById('taxBreakdown').innerHTML = [
+    fmtRow('Gross salary', '$' + salary.toLocaleString(), 'var(--text)'),
+    salSac > 0 ? fmtRow('Less: salary sacrifice', '-$' + r.salSacCapped.toLocaleString(undefined,{maximumFractionDigits:0}), 'var(--muted)') : '',
+    preTax > 0 ? fmtRow('Less: pre-tax deductions', '-$' + preTax.toLocaleString(), 'var(--muted)') : '',
+    otherIncome > 0 ? fmtRow('Plus: other income', '+$' + otherIncome.toLocaleString(), 'var(--muted)') : '',
+    fmtRow('Taxable income', '$' + r.taxableIncome.toLocaleString(undefined,{maximumFractionDigits:0}), 'var(--text)', true),
+    fmtRow('Gross income tax', '-$' + r.grossTax.toLocaleString(undefined,{maximumFractionDigits:0}), 'var(--red)'),
+    r.lito > 0 ? fmtRow('Low income tax offset', '+$' + r.lito.toLocaleString(undefined,{maximumFractionDigits:0}), 'var(--green)') : '',
+    fmtRow('Medicare levy (2%)', '-$' + r.medicare.toLocaleString(undefined,{maximumFractionDigits:0}), 'var(--red)'),
+    hasHelp ? fmtRow('HELP repayment', '-$' + r.helpRepay.toLocaleString(undefined,{maximumFractionDigits:0}), 'var(--red)') : '',
+    fmtRow('Net tax', '-$' + r.netTax.toLocaleString(undefined,{maximumFractionDigits:0}), 'var(--red)', true),
+    fmtRow('Take-home pay', '$' + r.takeHome.toLocaleString(undefined,{maximumFractionDigits:0}), 'var(--green)', true),
+    fmtRow('Marginal tax rate', r.marginalRate + '%', 'var(--muted)'),
+    fmtRow('Effective tax rate', r.effectiveRate.toFixed(1) + '%', 'var(--muted)'),
+  ].filter(Boolean).join('');
+
+  document.getElementById('superBreakdown').innerHTML = [
+    fmtRow('Employer super (' + empSuper + '%)', '$' + r.employerSuperAmt.toLocaleString(undefined,{maximumFractionDigits:0}), 'var(--text)'),
+    salSac > 0 ? fmtRow('Salary sacrifice', '+$' + r.salSacCapped.toLocaleString(undefined,{maximumFractionDigits:0}), 'var(--text)') : '',
+    fmtRow('Total concessional', '$' + r.superConcessional.toLocaleString(undefined,{maximumFractionDigits:0}), 'var(--blue)', true),
+    fmtRow('Contributions tax (15%)', '-$' + r.superTax.toLocaleString(undefined,{maximumFractionDigits:0}), 'var(--red)'),
+    fmtRow('Net super credited', '$' + r.superNet.toLocaleString(undefined,{maximumFractionDigits:0}), 'var(--green)', true),
+    fmtRow('Concessional cap', '$30,000', 'var(--muted)'),
+    fmtRow('Remaining cap', '$' + Math.max(0, 30000 - r.superConcessional).toLocaleString(undefined,{maximumFractionDigits:0}), 'var(--muted)'),
+  ].filter(Boolean).join('');
+
+  // Doughnut chart
+  const takeHome = r.takeHome, tax = r.netTax, super_ = r.superNet;
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('myChart'), {
+    type: 'doughnut',
+    data: { labels: ['Take-home', 'Tax & Levies', 'Super (net)'], datasets: [{ data: [takeHome, tax, super_], backgroundColor: ['#3fb950', '#f78166', '#58a6ff'], borderWidth: 0, hoverOffset: 4 }] },
+    options: {
+      responsive: true, animation: false, cutout: '65%',
+      plugins: { legend: { labels: { color: '#7d8590', font: { family: 'DM Sans', size: 12 }, padding: 16 } }, tooltip: { backgroundColor: '#0d1117', borderColor: '#21262d', borderWidth: 1, titleColor: '#7d8590', bodyColor: '#e6edf3', callbacks: { label: c => ' ' + c.label + ': $' + c.parsed.toLocaleString(undefined,{maximumFractionDigits:0}) } } }
+    }
+  });
+}
+
+IDS.forEach(id => document.getElementById(id).addEventListener('input', () => { save(); render(); }));
+document.getElementById('resetBtn').addEventListener('click', () => { if (!confirm('Reset?')) return; localStorage.removeItem(STORAGE_KEY); applyState(DEFAULTS); render(); });
+applyState(load() || DEFAULTS); render();
+</script>
+</body>
+</html>

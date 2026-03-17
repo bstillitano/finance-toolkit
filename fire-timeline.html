@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FIRE Timeline — Finance Toolkit</title>
+  <link rel="stylesheet" href="shared.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<nav class="tool-nav"><a href="index.html" class="nav-back">&#8592; Finance Toolkit</a></nav>
+<div class="app">
+  <div class="header-row">
+    <div>
+      <h1>FIRE Timeline</h1>
+      <p class="subtitle">Calculate your path to financial independence and early retirement. Based on the 4% safe withdrawal rate rule.</p>
+    </div>
+    <div class="header-actions">
+      <button class="reset-btn" id="resetBtn">Reset</button>
+      <div class="save-indicator" id="saveInd"><div class="dot"></div> Saved</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="section-title">Current Situation</div>
+    <div class="input-grid">
+      <div class="input-group"><label>Current Net Worth</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="netWorth" value="200000" step="10000"></div></div>
+      <div class="input-group"><label>Annual Income</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="income" value="120000" step="5000"></div></div>
+      <div class="input-group"><label>Annual Spend</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="spend" value="70000" step="5000"></div></div>
+      <div class="input-group"><label>Current Age</label><div class="input-wrap"><span class="pfx">yr</span><input type="number" id="age" value="32" step="1" min="18" max="80"></div></div>
+    </div>
+    <div class="sep"></div>
+    <div class="section-title">Assumptions</div>
+    <div class="input-grid">
+      <div class="input-group"><label>Pre-retirement Return (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="growthRate" value="8" step="0.5"></div></div>
+      <div class="input-group"><label>Post-retirement Return (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="retireRate" value="6" step="0.5"></div></div>
+      <div class="input-group"><label>Withdrawal Rate (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="withdrawRate" value="4" step="0.1" min="1" max="10"></div></div>
+      <div class="input-group"><label>Inflation (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="inflation" value="3" step="0.5"></div></div>
+    </div>
+  </div>
+
+  <div class="stats" id="statsRow"></div>
+  <div class="chart-wrap"><canvas id="myChart" height="280"></canvas></div>
+
+  <div class="panel" style="padding:0;overflow:hidden">
+    <div class="table-scroll">
+      <table><thead><tr><th>Year</th><th>Age</th><th>Net Worth</th><th>Annual Savings</th><th>FI Target</th><th>Progress</th></tr></thead>
+      <tbody id="tableBody"></tbody>
+    </table></div>
+  </div>
+  <p class="footer">The 4% rule is a guideline, not a guarantee. Sequence of returns risk, taxes, and healthcare costs are not modelled.</p>
+</div>
+
+<script>
+const STORAGE_KEY = 'fire-timeline-v1';
+const IDS = ['netWorth','income','spend','age','growthRate','retireRate','withdrawRate','inflation'];
+const DEFAULTS = { netWorth:200000, income:120000, spend:70000, age:32, growthRate:8, retireRate:6, withdrawRate:4, inflation:3 };
+
+let saveTimer = null;
+function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
+function save() { const s = {}; IDS.forEach(id => s[id] = document.getElementById(id).value); localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); flashSaved(); }
+function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } }
+function applyState(s) { IDS.forEach(id => { if (s[id] !== undefined) document.getElementById(id).value = s[id]; }); }
+function g(id) { return +document.getElementById(id).value || 0; }
+
+let chart = null;
+
+function render() {
+  const nw = g('netWorth'), income = g('income'), spend = g('spend');
+  const age = g('age'), growthRate = g('growthRate') / 100;
+  const retireRate = g('retireRate') / 100;
+  const wr = g('withdrawRate') / 100;
+  const inflation = g('inflation') / 100;
+
+  const annualSavings = income - spend;
+  const fiTarget = spend / wr;
+  const savingsRate = income > 0 ? (annualSavings / income * 100) : 0;
+
+  // Year-by-year accumulation
+  const years = [], worths = [], targets = [];
+  let bal = nw, target = fiTarget, fireYear = null;
+
+  for (let y = 0; y <= 60; y++) {
+    years.push(y);
+    worths.push(Math.round(bal));
+    targets.push(Math.round(target));
+    if (!fireYear && bal >= target) fireYear = y;
+    bal = bal * (1 + growthRate) + annualSavings;
+    target = target * (1 + inflation);
+    if (fireYear && y > fireYear + 5) break;
+  }
+
+  const fireAge = fireYear !== null ? age + fireYear : null;
+  const yearsToFire = fireYear;
+
+  // post-FIRE: how long does the portfolio last?
+  let portfolioBalance = fireYear !== null ? worths[fireYear] : 0;
+  let postFireYears = 0;
+  if (portfolioBalance > 0) {
+    let pb = portfolioBalance, annualWithdraw = spend;
+    for (let y = 0; y <= 60; y++) {
+      pb = pb * (1 + retireRate) - annualWithdraw;
+      annualWithdraw *= (1 + inflation);
+      if (pb <= 0) { postFireYears = y; break; }
+      if (y === 60) postFireYears = 60;
+    }
+  }
+
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card" style="border-top-color:var(--gold)">
+      <div class="stat-label">FI Target</div>
+      <div class="stat-value" style="color:var(--gold)">$${fiTarget.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+      <div class="stat-sub">At ${(wr*100).toFixed(1)}% withdrawal rate</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--green)">
+      <div class="stat-label">FIRE Date</div>
+      <div class="stat-value" style="color:var(--green)">${fireAge ? 'Age ' + fireAge : 'Not in 60 yrs'}</div>
+      <div class="stat-sub">${yearsToFire !== null ? yearsToFire + ' years from now' : '—'}</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--blue)">
+      <div class="stat-label">Annual Savings</div>
+      <div class="stat-value" style="color:var(--blue)">$${annualSavings.toLocaleString()}</div>
+      <div class="stat-sub">Savings rate: ${savingsRate.toFixed(1)}%</div>
+    </div>
+    <div class="stat-card" style="border-top-color:${postFireYears >= 40 ? 'var(--green)' : postFireYears >= 20 ? 'var(--gold)' : 'var(--red)'}">
+      <div class="stat-label">Portfolio lasts</div>
+      <div class="stat-value" style="color:${postFireYears >= 60 ? 'var(--green)' : postFireYears >= 30 ? 'var(--gold)' : 'var(--red)'}">${postFireYears >= 60 ? '60+ years' : postFireYears + ' years'}</div>
+      <div class="stat-sub">Post-retirement</div>
+    </div>`;
+
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('myChart'), {
+    type: 'line',
+    data: { labels: years.map(y => 'Yr ' + y), datasets: [
+      { label: 'Net Worth', data: worths, borderColor: '#58a6ff', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
+      { label: 'FI Target', data: targets, borderColor: '#d29922', borderWidth: 1.5, borderDash: [5,3], pointRadius: 0, tension: 0.3 },
+    ]},
+    options: {
+      responsive: true, animation: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { color: '#7d8590', font: { family: 'DM Sans', size: 12 }, boxWidth: 20 } }, tooltip: { backgroundColor: '#0d1117', borderColor: '#21262d', borderWidth: 1, titleColor: '#7d8590', bodyColor: '#e6edf3', callbacks: { label: c => ' ' + c.dataset.label + ': $' + c.parsed.y.toLocaleString() } } },
+      scales: { x: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 } }, grid: { color: '#21262d' } }, y: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 }, callback: v => '$' + (v >= 1e6 ? (v/1e6).toFixed(1)+'M' : (v/1000).toFixed(0)+'k') }, grid: { color: '#21262d' } } }
+    }
+  });
+
+  const tableRows = years.filter((_, i) => [0,1,2,3,5,7,10,15,20,25,30].includes(i) || i === (fireYear ?? -1));
+  document.getElementById('tableBody').innerHTML = [...new Set(tableRows)].map(y => {
+    const w = worths[y] ?? 0, t = targets[y] ?? fiTarget;
+    const pct = Math.min(w / t * 100, 100);
+    const isFire = y === fireYear;
+    return `<tr style="${isFire ? 'background:rgba(210,153,34,0.08)' : ''}">
+      <td>${y}${isFire ? ' 🔥' : ''}</td>
+      <td>${age + y}</td>
+      <td style="color:var(--blue);font-weight:${isFire?600:400}">$${w.toLocaleString()}</td>
+      <td style="color:var(--green)">$${annualSavings.toLocaleString()}</td>
+      <td>$${t.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+      <td style="color:${pct>=100?'var(--gold)':pct>=75?'var(--green)':'var(--muted)'}">${pct.toFixed(1)}%</td>
+    </tr>`;
+  }).join('');
+}
+
+IDS.forEach(id => document.getElementById(id).addEventListener('input', () => { save(); render(); }));
+document.getElementById('resetBtn').addEventListener('click', () => { if (!confirm('Reset?')) return; localStorage.removeItem(STORAGE_KEY); applyState(DEFAULTS); render(); });
+applyState(load() || DEFAULTS); render();
+</script>
+</body>
+</html>

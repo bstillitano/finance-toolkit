@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Borrowing Capacity — Finance Toolkit</title>
+  <link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+<nav class="tool-nav"><a href="index.html" class="nav-back">&#8592; Finance Toolkit</a></nav>
+<div class="app">
+  <div class="header-row">
+    <div>
+      <h1>Borrowing Capacity</h1>
+      <p class="subtitle">Estimate your maximum loan size based on income, expenses, and existing liabilities. Uses APRA serviceability buffer.</p>
+    </div>
+    <div class="header-actions">
+      <button class="reset-btn" id="resetBtn">Reset</button>
+      <div class="save-indicator" id="saveInd"><div class="dot"></div> Saved</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="section-title">Income (Annual, Before Tax)</div>
+    <div class="input-grid">
+      <div class="input-group"><label>Base Salary</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="salary" value="120000" step="5000"></div></div>
+      <div class="input-group"><label>Partner's Salary</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="salary2" value="80000" step="5000"></div></div>
+      <div class="input-group"><label>Rental Income</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="rentalIncome" value="0" step="1000"></div></div>
+      <div class="input-group"><label>Other Income</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="otherIncome" value="0" step="1000"></div></div>
+    </div>
+    <div class="sep"></div>
+    <div class="section-title">Monthly Living Expenses</div>
+    <div class="input-grid">
+      <div class="input-group"><label>Basic Living Expenses</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="living" value="3500" step="100"></div></div>
+      <div class="input-group"><label>Dependants</label><div class="input-wrap"><span class="pfx">#</span><input type="number" id="dependants" value="0" step="1" min="0"></div></div>
+    </div>
+    <div class="sep"></div>
+    <div class="section-title">Existing Liabilities (Monthly)</div>
+    <div class="input-grid">
+      <div class="input-group"><label>Other Loan Repayments</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="otherLoans" value="0" step="100"></div></div>
+      <div class="input-group"><label>Credit Card Limits (total)</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="creditCards" value="10000" step="1000"></div></div>
+      <div class="input-group"><label>HECS / HELP Balance</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="hecs" value="0" step="5000"></div></div>
+    </div>
+    <div class="sep"></div>
+    <div class="section-title">Loan Parameters</div>
+    <div class="input-grid">
+      <div class="input-group"><label>Interest Rate (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="intRate" value="6.00" step="0.05"></div></div>
+      <div class="input-group"><label>Assessment Buffer (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="buffer" value="3" step="0.5"></div></div>
+      <div class="input-group"><label>Loan Term (years)</label><div class="input-wrap"><span class="pfx">yr</span><input type="number" id="term" value="30" step="1"></div></div>
+    </div>
+  </div>
+
+  <div class="stats" id="statsRow"></div>
+
+  <div class="panel">
+    <div class="section-title">Capacity by Scenario</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr>
+        <th style="text-align:left;padding:8px 4px;color:var(--muted);border-bottom:2px solid var(--border)">Lender Type</th>
+        <th style="text-align:right;padding:8px 4px;color:var(--muted);border-bottom:2px solid var(--border)">Assessment Rate</th>
+        <th style="text-align:right;padding:8px 4px;color:var(--muted);border-bottom:2px solid var(--border)">Max Loan</th>
+        <th style="text-align:right;padding:8px 4px;color:var(--muted);border-bottom:2px solid var(--border)">Max Purchase (80% LVR)</th>
+      </tr></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+  <p class="footer">This is an estimate only. Actual borrowing capacity varies by lender and requires a formal credit assessment.</p>
+</div>
+
+<script>
+const STORAGE_KEY = 'borrowing-capacity-v1';
+const IDS = ['salary','salary2','rentalIncome','otherIncome','living','dependants','otherLoans','creditCards','hecs','intRate','buffer','term'];
+const DEFAULTS = { salary:120000,salary2:80000,rentalIncome:0,otherIncome:0,living:3500,dependants:0,otherLoans:0,creditCards:10000,hecs:0,intRate:6,buffer:3,term:30 };
+
+let saveTimer = null;
+function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
+function save() { const s = {}; IDS.forEach(id => s[id] = document.getElementById(id).value); localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); flashSaved(); }
+function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } }
+function applyState(s) { IDS.forEach(id => { if (s[id] !== undefined) document.getElementById(id).value = s[id]; }); }
+function g(id) { return +document.getElementById(id).value || 0; }
+
+function calcIncomeTax(income) {
+  if (income <= 18200) return 0;
+  if (income <= 45000) return (income - 18200) * 0.19;
+  if (income <= 120000) return 5092 + (income - 45000) * 0.325;
+  if (income <= 180000) return 29467 + (income - 120000) * 0.37;
+  return 51667 + (income - 180000) * 0.45;
+}
+
+function calcMaxLoan(assessRate, n, netMonthlyIncome, monthlyExpenses) {
+  const rm = assessRate / 12;
+  const availableRepayment = netMonthlyIncome - monthlyExpenses;
+  if (availableRepayment <= 0 || rm === 0) return 0;
+  return availableRepayment * (1 - Math.pow(1 + rm, -n)) / rm;
+}
+
+function render() {
+  const salary = g('salary'), salary2 = g('salary2');
+  const rentalIncome = g('rentalIncome') * 0.8; // 80% of rental income
+  const otherIncome = g('otherIncome');
+  const living = g('living'), dependants = g('dependants');
+  const otherLoans = g('otherLoans');
+  const creditCards = g('creditCards');
+  const hecs = g('hecs');
+  const intRate = g('intRate') / 100;
+  const buffer = g('buffer') / 100;
+  const term = g('term');
+  const n = term * 12;
+
+  const totalGross = salary + salary2 + rentalIncome + otherIncome;
+  const tax1 = calcIncomeTax(salary), tax2 = calcIncomeTax(salary2);
+  const medicare = (salary + salary2) * 0.02;
+  const hecsRepay = hecs > 0 ? (salary + salary2) * 0.04 : 0; // approx
+  const netAnnual = totalGross - tax1 - tax2 - medicare - hecsRepay;
+  const netMonthly = netAnnual / 12;
+
+  // Monthly expenses
+  const depCost = dependants * 500; // ~$500/mo per dependant
+  const ccCommitment = creditCards * 0.03; // 3% of limit
+  const totalExpenses = living + depCost + otherLoans + ccCommitment;
+
+  const scenarios = [
+    { label: 'Major bank (standard)', extraBuffer: 0 },
+    { label: 'Major bank (APRA +3%)', extraBuffer: 0 },
+    { label: 'Non-bank lender', extraBuffer: -0.005 },
+  ];
+
+  const assessRate = intRate + buffer;
+
+  const maxLoan = Math.max(0, Math.round(calcMaxLoan(assessRate, n, netMonthly, totalExpenses)));
+  const maxPurchase = Math.round(maxLoan / 0.8);
+  const dsr = totalExpenses / netMonthly * 100;
+
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card" style="border-top-color:var(--blue)">
+      <div class="stat-label">Estimated max loan</div>
+      <div class="stat-value" style="color:var(--blue)">$${maxLoan.toLocaleString()}</div>
+      <div class="stat-sub">At ${(intRate*100).toFixed(2)}% + ${(buffer*100).toFixed(0)}% buffer</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--green)">
+      <div class="stat-label">Max purchase (80% LVR)</div>
+      <div class="stat-value" style="color:var(--green)">$${maxPurchase.toLocaleString()}</div>
+      <div class="stat-sub">Requires $${(maxPurchase*0.2).toLocaleString()} deposit</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--muted)">
+      <div class="stat-label">Net monthly income</div>
+      <div class="stat-value">$${Math.round(netMonthly).toLocaleString()}</div>
+    </div>
+    <div class="stat-card" style="border-top-color:${dsr < 40 ? 'var(--green)' : dsr < 60 ? 'var(--gold)' : 'var(--red)'}">
+      <div class="stat-label">Debt service ratio</div>
+      <div class="stat-value" style="color:${dsr < 40 ? 'var(--green)' : dsr < 60 ? 'var(--gold)' : 'var(--red)'}">${dsr.toFixed(1)}%</div>
+      <div class="stat-sub">Monthly expenses / net income</div>
+    </div>`;
+
+  const buffers = [buffer, buffer + 0.01, buffer - 0.005];
+  const labels = ['Standard (your buffer)', 'Conservative (+1%)', 'Aggressive (-0.5%)'];
+  document.getElementById('tableBody').innerHTML = buffers.map((buf, i) => {
+    const ar = intRate + buf;
+    const loan = Math.max(0, Math.round(calcMaxLoan(ar, n, netMonthly, totalExpenses)));
+    const purchase = Math.round(loan / 0.8);
+    return `<tr>
+      <td style="padding:9px 4px;border-bottom:1px solid var(--border);color:var(--muted)">${labels[i]}</td>
+      <td style="padding:9px 4px;text-align:right;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace">${((intRate+buf)*100).toFixed(2)}%</td>
+      <td style="padding:9px 4px;text-align:right;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace;color:var(--blue);font-weight:${i===0?600:400}">$${loan.toLocaleString()}</td>
+      <td style="padding:9px 4px;text-align:right;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace;color:var(--green)">$${purchase.toLocaleString()}</td>
+    </tr>`;
+  }).join('');
+}
+
+IDS.forEach(id => document.getElementById(id).addEventListener('input', () => { save(); render(); }));
+document.getElementById('resetBtn').addEventListener('click', () => { if (!confirm('Reset?')) return; localStorage.removeItem(STORAGE_KEY); applyState(DEFAULTS); render(); });
+applyState(load() || DEFAULTS); render();
+</script>
+</body>
+</html>

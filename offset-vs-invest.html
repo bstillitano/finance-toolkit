@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offset vs. Invest — Finance Toolkit</title>
+  <link rel="stylesheet" href="shared.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<nav class="tool-nav"><a href="index.html" class="nav-back">&#8592; Finance Toolkit</a></nav>
+<div class="app">
+  <div class="header-row">
+    <div>
+      <h1>Offset vs. Invest</h1>
+      <p class="subtitle">Compare putting spare cash into your mortgage offset against investing in the market after tax.</p>
+    </div>
+    <div class="header-actions">
+      <button class="reset-btn" id="resetBtn">Reset</button>
+      <div class="save-indicator" id="saveInd"><div class="dot"></div> Saved</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="section-title">Your Mortgage</div>
+    <div class="input-grid">
+      <div class="input-group"><label>Mortgage Rate (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="mortgageRate" value="6.00" step="0.05"></div></div>
+      <div class="input-group"><label>Marginal Tax Rate (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="taxRate" value="37" step="1"></div></div>
+    </div>
+    <div class="sep"></div>
+    <div class="section-title">Investment Assumptions</div>
+    <div class="input-grid">
+      <div class="input-group"><label>Expected Return (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="investReturn" value="9.00" step="0.5"></div></div>
+      <div class="input-group"><label>Investment Type</label><div class="input-wrap" style="padding-left:0"><select id="investType" style="padding-left:10px"><option value="growth">Growth (CGT 50% discount)</option><option value="income">Income (fully taxed)</option><option value="super">Inside super (15% tax)</option></select></div></div>
+      <div class="input-group"><label>Amount to Deploy ($)</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="amount" value="50000" step="5000"></div></div>
+      <div class="input-group"><label>Time Horizon (years)</label><div class="input-wrap"><span class="pfx">yr</span><input type="number" id="years" value="10" step="1" min="1" max="40"></div></div>
+    </div>
+  </div>
+
+  <div class="stats" id="statsRow"></div>
+
+  <div class="chart-wrap"><canvas id="myChart" height="280"></canvas></div>
+
+  <div class="panel" style="padding:0;overflow:hidden">
+    <div class="table-scroll">
+      <table><thead><tr id="tableHead"></tr></thead><tbody id="tableBody"></tbody></table>
+    </div>
+  </div>
+
+  <p class="footer">Tax calculations are simplified estimates. Consult a financial adviser for personalised advice.</p>
+</div>
+
+<script>
+const STORAGE_KEY = 'offset-vs-invest-v1';
+const DEFAULTS = { mortgageRate: 6.00, taxRate: 37, investReturn: 9.00, investType: 'growth', amount: 50000, years: 10 };
+const IDS = ['mortgageRate','taxRate','investReturn','investType','amount','years'];
+
+let saveTimer = null;
+function flashSaved() {
+  const el = document.getElementById('saveInd');
+  el.classList.add('show');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+function save() {
+  const s = {};
+  IDS.forEach(id => s[id] = document.getElementById(id).value);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+  flashSaved();
+}
+
+function load() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; }
+}
+
+function applyState(s) {
+  IDS.forEach(id => { if (s[id] !== undefined) document.getElementById(id).value = s[id]; });
+}
+
+function g(id) { return +document.getElementById(id).value || 0; }
+function gs(id) { return document.getElementById(id).value; }
+
+function calcAfterTaxReturn(grossReturn, taxRate, type) {
+  if (type === 'super') return grossReturn * (1 - 0.15);
+  if (type === 'income') return grossReturn * (1 - taxRate / 100);
+  // growth: assume 50% CGT discount, realised at end — approximate annual after-tax
+  const cgRate = taxRate / 100 * 0.5;
+  return grossReturn * (1 - cgRate);
+}
+
+let chart = null;
+
+function render() {
+  const mr = g('mortgageRate') / 100;
+  const tr = g('taxRate') / 100;
+  const ir = g('investReturn') / 100;
+  const type = gs('investType');
+  const amount = g('amount');
+  const years = Math.round(g('years'));
+
+  // Offset: guaranteed after-tax return = mortgage rate (already tax-free)
+  const offsetRate = mr;
+
+  // Invest: after-tax return
+  const investRate = calcAfterTaxReturn(ir * 100, g('taxRate'), type) / 100;
+
+  // Year-by-year values
+  const offsetValues = [], investValues = [];
+  for (let y = 0; y <= years; y++) {
+    offsetValues.push(Math.round(amount * Math.pow(1 + offsetRate, y)));
+    investValues.push(Math.round(amount * Math.pow(1 + investRate, y)));
+  }
+
+  const offsetFinal = offsetValues[years];
+  const investFinal = investValues[years];
+  const offsetWins = offsetFinal >= investFinal;
+
+  // break-even
+  let breakEven = null;
+  for (let y = 1; y <= years; y++) {
+    const ov = amount * Math.pow(1 + offsetRate, y);
+    const iv = amount * Math.pow(1 + investRate, y);
+    if ((!offsetWins && ov >= iv) || (offsetWins && iv >= ov)) { breakEven = y; break; }
+  }
+
+  // stat cards
+  const equivalent = (Math.pow(1 + offsetRate, 1) - 1) * 100;
+  const taxFreeEquiv = offsetRate / (1 - tr) * 100;
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card" style="border-top-color:var(--blue)">
+      <div class="stat-label">Offset effective return</div>
+      <div class="stat-value" style="color:var(--blue)">${(offsetRate*100).toFixed(2)}% tax-free</div>
+      <div class="stat-sub">Equiv. taxable: ${taxFreeEquiv.toFixed(2)}%</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--green)">
+      <div class="stat-label">Investment after-tax return</div>
+      <div class="stat-value" style="color:var(--green)">${(investRate*100).toFixed(2)}% p.a.</div>
+      <div class="stat-sub">Gross: ${(ir*100).toFixed(2)}%</div>
+    </div>
+    <div class="stat-card" style="border-top-color:${offsetWins ? 'var(--blue)' : 'var(--green)'}">
+      <div class="stat-label">Better outcome at year ${years}</div>
+      <div class="stat-value" style="color:${offsetWins ? 'var(--blue)' : 'var(--green)'}">${offsetWins ? 'Offset' : 'Invest'}</div>
+      <div class="stat-sub">By $${Math.abs(offsetFinal - investFinal).toLocaleString()}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Break-even year</div>
+      <div class="stat-value">${breakEven ? 'Year ' + breakEven : investRate > offsetRate ? 'Never (invest always ahead)' : 'Never (offset always ahead)'}</div>
+    </div>`;
+
+  // chart
+  const labels = Array.from({length: years + 1}, (_, i) => 'Yr ' + i);
+  const cfg = {
+    type: 'line',
+    data: { labels, datasets: [
+      { label: 'Offset', data: offsetValues, borderColor: '#58a6ff', borderWidth: 2.5, pointRadius: 0, tension: 0.3, fill: false },
+      { label: 'Invest', data: investValues, borderColor: '#3fb950', borderWidth: 2.5, pointRadius: 0, tension: 0.3, fill: false },
+    ]},
+    options: {
+      responsive: true, animation: false, interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#7d8590', font: { family: 'DM Sans', size: 12 }, boxWidth: 20 } },
+        tooltip: { backgroundColor: '#0d1117', borderColor: '#21262d', borderWidth: 1, titleColor: '#7d8590', bodyColor: '#e6edf3', callbacks: { label: c => ' ' + c.dataset.label + ': $' + c.parsed.y.toLocaleString() } }
+      },
+      scales: {
+        x: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 } }, grid: { color: '#21262d' } },
+        y: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 }, callback: v => '$' + (v/1000).toFixed(0) + 'k' }, grid: { color: '#21262d' } }
+      }
+    }
+  };
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('myChart'), cfg);
+
+  // table
+  document.getElementById('tableHead').innerHTML = '<th>Year</th><th>Offset Value</th><th>Invest Value</th><th>Offset Gain</th><th>Invest Gain</th><th>Difference</th>';
+  const rows = [1, 2, 3, 5, 7, 10, 15, 20].filter(y => y <= years);
+  if (!rows.includes(years)) rows.push(years);
+  document.getElementById('tableBody').innerHTML = rows.map(y => {
+    const ov = offsetValues[y], iv = investValues[y];
+    const diff = ov - iv;
+    const winner = diff >= 0 ? 'var(--blue)' : 'var(--green)';
+    return `<tr>
+      <td>${y}</td>
+      <td style="color:var(--blue)">$${ov.toLocaleString()}</td>
+      <td style="color:var(--green)">$${iv.toLocaleString()}</td>
+      <td>$${(ov - amount).toLocaleString()}</td>
+      <td>$${(iv - amount).toLocaleString()}</td>
+      <td style="color:${winner};font-weight:600">${diff >= 0 ? '+' : ''}$${diff.toLocaleString()}</td>
+    </tr>`;
+  }).join('');
+}
+
+IDS.forEach(id => document.getElementById(id).addEventListener('input', () => { save(); render(); }));
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (!confirm('Reset to defaults?')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  applyState(DEFAULTS); render();
+});
+
+const saved = load();
+applyState(saved || DEFAULTS);
+render();
+</script>
+</body>
+</html>

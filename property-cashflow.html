@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Property Cash Flow — Finance Toolkit</title>
+  <link rel="stylesheet" href="shared.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<nav class="tool-nav"><a href="index.html" class="nav-back">&#8592; Finance Toolkit</a></nav>
+<div class="app">
+  <div class="header-row">
+    <div>
+      <h1>Property Cash Flow</h1>
+      <p class="subtitle">Analyse an investment property's yield, negative gearing benefit, and net annual cash position.</p>
+    </div>
+    <div class="header-actions">
+      <button class="reset-btn" id="resetBtn">Reset</button>
+      <div class="save-indicator" id="saveInd"><div class="dot"></div> Saved</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="section-title">Property &amp; Purchase</div>
+    <div class="input-grid">
+      <div class="input-group"><label>Purchase Price</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="price" value="700000" step="10000"></div></div>
+      <div class="input-group"><label>Loan Amount</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="loanAmt" value="560000" step="10000"></div></div>
+      <div class="input-group"><label>Interest Rate (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="intRate" value="6.00" step="0.05"></div></div>
+      <div class="input-group"><label>Loan Type</label><select id="loanType" style="padding-left:10px"><option value="io">Interest Only</option><option value="pi">P&amp;I</option></select></div>
+    </div>
+    <div class="sep"></div>
+    <div class="section-title">Income</div>
+    <div class="input-grid">
+      <div class="input-group"><label>Weekly Rent</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="weeklyRent" value="550" step="25"></div></div>
+      <div class="input-group"><label>Vacancy Rate (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="vacancy" value="4" step="1"></div></div>
+    </div>
+    <div class="sep"></div>
+    <div class="section-title">Annual Expenses</div>
+    <div class="input-grid">
+      <div class="input-group"><label>Rates &amp; Insurance</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="ratesIns" value="4000" step="200"></div></div>
+      <div class="input-group"><label>Property Management (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="mgmtPct" value="8.5" step="0.5"></div></div>
+      <div class="input-group"><label>Maintenance / Repairs</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="maintenance" value="2000" step="200"></div></div>
+      <div class="input-group"><label>Other Expenses</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="otherExp" value="500" step="100"></div></div>
+    </div>
+    <div class="sep"></div>
+    <div class="section-title">Tax &amp; Depreciation</div>
+    <div class="input-grid">
+      <div class="input-group"><label>Marginal Tax Rate (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="taxRate" value="37" step="1"></div></div>
+      <div class="input-group"><label>Building Depreciation (Div 43)</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="div43" value="5000" step="500"></div></div>
+      <div class="input-group"><label>Fixtures Depreciation (Div 40)</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="div40" value="3000" step="500"></div></div>
+    </div>
+  </div>
+
+  <div class="stats" id="statsRow"></div>
+
+  <div class="panel">
+    <div class="section-title">Annual Cash Flow Breakdown</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tbody id="breakdownTable"></tbody>
+    </table>
+  </div>
+
+  <p class="footer">Tax benefits depend on your personal tax situation. Consult a tax adviser. Not financial advice.</p>
+</div>
+
+<script>
+const STORAGE_KEY = 'property-cashflow-v1';
+const IDS = ['price','loanAmt','intRate','loanType','weeklyRent','vacancy','ratesIns','mgmtPct','maintenance','otherExp','taxRate','div43','div40'];
+const DEFAULTS = { price:700000,loanAmt:560000,intRate:6,loanType:'io',weeklyRent:550,vacancy:4,ratesIns:4000,mgmtPct:8.5,maintenance:2000,otherExp:500,taxRate:37,div43:5000,div40:3000 };
+
+let saveTimer = null;
+function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
+function save() { const s = {}; IDS.forEach(id => s[id] = document.getElementById(id).value); localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); flashSaved(); }
+function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } }
+function applyState(s) { IDS.forEach(id => { if (s[id] !== undefined) document.getElementById(id).value = s[id]; }); }
+function g(id) { return +document.getElementById(id).value || 0; }
+function gs(id) { return document.getElementById(id).value; }
+function row(label, val, color, bold) {
+  return `<tr><td style="padding:8px 4px;color:var(--muted);border-bottom:1px solid var(--border)">${label}</td><td style="padding:8px 4px;text-align:right;font-family:'DM Mono',monospace;border-bottom:1px solid var(--border);color:${color||'var(--text)'};font-weight:${bold?600:400}">${val}</td></tr>`;
+}
+
+function render() {
+  const price = g('price'), loan = g('loanAmt');
+  const intRate = g('intRate') / 100;
+  const weeklyRent = g('weeklyRent');
+  const vacancy = g('vacancy') / 100;
+  const ratesIns = g('ratesIns');
+  const mgmtPct = g('mgmtPct') / 100;
+  const maintenance = g('maintenance');
+  const otherExp = g('otherExp');
+  const taxRate = g('taxRate') / 100;
+  const div43 = g('div43'), div40 = g('div40');
+  const loanType = gs('loanType');
+
+  const grossRentalIncome = weeklyRent * 52;
+  const effectiveRentalIncome = grossRentalIncome * (1 - vacancy);
+  const interestExpense = loan * intRate;
+  const mgmtFee = effectiveRentalIncome * mgmtPct;
+  const totalExpenses = interestExpense + ratesIns + mgmtFee + maintenance + otherExp;
+  const totalDeductions = totalExpenses + div43 + div40;
+  const taxableLoss = effectiveRentalIncome - totalDeductions;
+  const taxBenefit = taxableLoss < 0 ? Math.abs(taxableLoss) * taxRate : 0;
+
+  // P&I repayment
+  const rm = intRate / 12, n = 30 * 12;
+  const piRepay = loanType === 'pi' ? loan * rm * Math.pow(1+rm,n) / (Math.pow(1+rm,n)-1) * 12 : interestExpense;
+  const principalPaid = loanType === 'pi' ? piRepay - interestExpense : 0;
+
+  const preTaxCashflow = effectiveRentalIncome - piRepay - ratesIns - mgmtFee - maintenance - otherExp;
+  const postTaxCashflow = preTaxCashflow + taxBenefit;
+  const equity = price - loan;
+  const grossYield = grossRentalIncome / price * 100;
+  const netYield = (effectiveRentalIncome - ratesIns - mgmtFee - maintenance - otherExp) / price * 100;
+
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card" style="border-top-color:var(--blue)">
+      <div class="stat-label">Gross Yield</div>
+      <div class="stat-value" style="color:var(--blue)">${grossYield.toFixed(2)}%</div>
+      <div class="stat-sub">$${grossRentalIncome.toLocaleString()} p.a.</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--green)">
+      <div class="stat-label">Net Yield</div>
+      <div class="stat-value" style="color:var(--green)">${netYield.toFixed(2)}%</div>
+      <div class="stat-sub">After expenses, before interest</div>
+    </div>
+    <div class="stat-card" style="border-top-color:${preTaxCashflow >= 0 ? 'var(--green)' : 'var(--red)'}">
+      <div class="stat-label">Pre-tax cash flow</div>
+      <div class="stat-value" style="color:${preTaxCashflow >= 0 ? 'var(--green)' : 'var(--red)'}">${preTaxCashflow >= 0 ? '+' : ''}$${preTaxCashflow.toLocaleString(undefined,{maximumFractionDigits:0})} p.a.</div>
+      <div class="stat-sub">${preTaxCashflow >= 0 ? 'Positively geared' : 'Negatively geared'}</div>
+    </div>
+    <div class="stat-card" style="border-top-color:${postTaxCashflow >= 0 ? 'var(--green)' : 'var(--gold)'}">
+      <div class="stat-label">Post-tax cash flow</div>
+      <div class="stat-value" style="color:${postTaxCashflow >= 0 ? 'var(--green)' : 'var(--gold)'}">${postTaxCashflow >= 0 ? '+' : ''}$${postTaxCashflow.toLocaleString(undefined,{maximumFractionDigits:0})} p.a.</div>
+      <div class="stat-sub">Tax benefit: $${taxBenefit.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+    </div>`;
+
+  const fmt = v => (v >= 0 ? '+' : '') + '$' + Math.abs(v).toLocaleString(undefined,{maximumFractionDigits:0});
+  document.getElementById('breakdownTable').innerHTML = [
+    row('Gross rental income', '$' + grossRentalIncome.toLocaleString(), 'var(--green)'),
+    row('Less: vacancy (' + (vacancy*100).toFixed(0) + '%)', '-$' + (grossRentalIncome*vacancy).toLocaleString(undefined,{maximumFractionDigits:0}), 'var(--red)'),
+    row('Effective rental income', '$' + effectiveRentalIncome.toLocaleString(undefined,{maximumFractionDigits:0}), 'var(--green)', true),
+    row('Less: interest expense', '-$' + interestExpense.toLocaleString(undefined,{maximumFractionDigits:0}), 'var(--red)'),
+    row('Less: rates &amp; insurance', '-$' + ratesIns.toLocaleString(), 'var(--red)'),
+    row('Less: property management', '-$' + mgmtFee.toLocaleString(undefined,{maximumFractionDigits:0}), 'var(--red)'),
+    row('Less: maintenance &amp; repairs', '-$' + maintenance.toLocaleString(), 'var(--red)'),
+    row('Less: other expenses', '-$' + otherExp.toLocaleString(), 'var(--red)'),
+    row('Less: Div 43 depreciation', '-$' + div43.toLocaleString(), 'var(--muted)'),
+    row('Less: Div 40 depreciation', '-$' + div40.toLocaleString(), 'var(--muted)'),
+    row('Taxable income / (loss)', fmt(taxableLoss), taxableLoss >= 0 ? 'var(--green)' : 'var(--gold)', true),
+    row('Tax refund / (liability)', fmt(taxBenefit), 'var(--gold)', true),
+    row('Pre-tax cash flow p.a.', fmt(preTaxCashflow), preTaxCashflow >= 0 ? 'var(--green)' : 'var(--red)', true),
+    row('Post-tax cash flow p.a.', fmt(postTaxCashflow), postTaxCashflow >= 0 ? 'var(--green)' : 'var(--gold)', true),
+    row('Post-tax cash flow p.wk', fmt(postTaxCashflow / 52), postTaxCashflow >= 0 ? 'var(--green)' : 'var(--gold)'),
+  ].join('');
+}
+
+IDS.forEach(id => document.getElementById(id).addEventListener('input', () => { save(); render(); }));
+document.getElementById('resetBtn').addEventListener('click', () => { if (!confirm('Reset?')) return; localStorage.removeItem(STORAGE_KEY); applyState(DEFAULTS); render(); });
+applyState(load() || DEFAULTS); render();
+</script>
+</body>
+</html>

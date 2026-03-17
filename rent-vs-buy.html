@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rent vs. Buy — Finance Toolkit</title>
+  <link rel="stylesheet" href="shared.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<nav class="tool-nav"><a href="index.html" class="nav-back">&#8592; Finance Toolkit</a></nav>
+<div class="app">
+  <div class="header-row">
+    <div>
+      <h1>Rent vs. Buy</h1>
+      <p class="subtitle">Find the break-even point where buying becomes cheaper than renting, factoring in all costs and opportunity cost.</p>
+    </div>
+    <div class="header-actions">
+      <button class="reset-btn" id="resetBtn">Reset</button>
+      <div class="save-indicator" id="saveInd"><div class="dot"></div> Saved</div>
+    </div>
+  </div>
+
+  <div class="two-col" style="margin-bottom:20px">
+    <div class="panel" style="margin-bottom:0">
+      <div class="section-title" style="color:var(--blue)">Buying</div>
+      <div class="input-grid">
+        <div class="input-group"><label>Purchase Price</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="buyPrice" value="800000" step="10000"></div></div>
+        <div class="input-group"><label>Deposit</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="deposit" value="160000" step="10000"></div></div>
+        <div class="input-group"><label>Mortgage Rate (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="mortRate" value="6.00" step="0.05"></div></div>
+        <div class="input-group"><label>Loan Term (years)</label><div class="input-wrap"><span class="pfx">yr</span><input type="number" id="loanTerm" value="30" step="1"></div></div>
+        <div class="input-group"><label>Stamp Duty</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="stampDuty" value="31335" step="1000"></div></div>
+        <div class="input-group"><label>Annual Rates &amp; Insurance</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="ownCosts" value="4000" step="200"></div></div>
+        <div class="input-group"><label>Annual Maintenance</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="maintenance" value="4000" step="200"></div></div>
+        <div class="input-group"><label>Property Growth (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="propGrowth" value="4.5" step="0.5"></div></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-bottom:0">
+      <div class="section-title" style="color:var(--green)">Renting</div>
+      <div class="input-grid">
+        <div class="input-group"><label>Weekly Rent</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="weeklyRent" value="650" step="25"></div></div>
+        <div class="input-group"><label>Rent Increase (%/yr)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="rentIncrease" value="4" step="0.5"></div></div>
+        <div class="input-group"><label>Renters Insurance</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="rentInsurance" value="600" step="100"></div></div>
+        <div class="input-group"><label>Investment Return (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="investReturn" value="8.00" step="0.5"></div></div>
+        <div class="input-group"><label>Tax Rate on Returns (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="taxRate" value="32.5" step="1"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats" id="statsRow"></div>
+  <div class="chart-wrap"><canvas id="myChart" height="280"></canvas></div>
+
+  <div class="panel" style="padding:0;overflow:hidden">
+    <div class="table-scroll">
+      <table><thead><tr><th>Year</th><th style="color:var(--blue)">Buy: Net Worth</th><th style="color:var(--blue)">Buy: Total Paid</th><th style="color:var(--green)">Rent: Portfolio</th><th style="color:var(--green)">Rent: Total Paid</th><th>Advantage</th></tr></thead>
+      <tbody id="tableBody"></tbody></table>
+    </div>
+  </div>
+  <p class="footer">This is a simplified model. Does not account for CGT on investment property sale, LMI, or changes in interest rates.</p>
+</div>
+
+<script>
+const STORAGE_KEY = 'rent-vs-buy-v1';
+const IDS = ['buyPrice','deposit','mortRate','loanTerm','stampDuty','ownCosts','maintenance','propGrowth','weeklyRent','rentIncrease','rentInsurance','investReturn','taxRate'];
+const DEFAULTS = { buyPrice:800000,deposit:160000,mortRate:6,loanTerm:30,stampDuty:31335,ownCosts:4000,maintenance:4000,propGrowth:4.5,weeklyRent:650,rentIncrease:4,rentInsurance:600,investReturn:8,taxRate:32.5 };
+
+let saveTimer = null;
+function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
+function save() { const s = {}; IDS.forEach(id => s[id] = document.getElementById(id).value); localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); flashSaved(); }
+function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } }
+function applyState(s) { IDS.forEach(id => { if (s[id] !== undefined) document.getElementById(id).value = s[id]; }); }
+function g(id) { return +document.getElementById(id).value || 0; }
+
+let chart = null;
+
+function render() {
+  const buyPrice = g('buyPrice'), deposit = g('deposit'), stampDuty = g('stampDuty');
+  const loan = buyPrice - deposit;
+  const mortRate = g('mortRate') / 100;
+  const rm = mortRate / 12, loanTerm = g('loanTerm'), n = loanTerm * 12;
+  const monthlyRepay = rm > 0 ? loan * rm * Math.pow(1+rm,n) / (Math.pow(1+rm,n) - 1) : loan / n;
+  const ownCosts = g('ownCosts'), maintenance = g('maintenance'), propGrowth = g('propGrowth') / 100;
+
+  const weeklyRent = g('weeklyRent'), rentIncrease = g('rentIncrease') / 100;
+  const rentInsurance = g('rentInsurance');
+  const investReturn = g('investReturn') / 100;
+  const taxRate = g('taxRate') / 100;
+  const afterTaxReturn = investReturn * (1 - taxRate * 0.5); // assume ~50% CGT discount
+
+  // Year-by-year simulation
+  const years = 30;
+  const buyNetWorths = [], rentNetWorths = [], buyPaidArr = [], rentPaidArr = [];
+
+  let propValue = buyPrice, loanBal = loan;
+  let rentPortfolio = deposit + stampDuty; // renter invests deposit + stamp duty upfront
+  let buyTotalPaid = deposit + stampDuty, rentTotalPaid = 0;
+  let annualRent = weeklyRent * 52;
+
+  buyNetWorths.push(propValue - loanBal); rentNetWorths.push(rentPortfolio);
+  buyPaidArr.push(buyTotalPaid); rentPaidArr.push(rentTotalPaid);
+
+  let breakEven = null;
+
+  for (let y = 1; y <= years; y++) {
+    // Buy: mortgage + costs
+    const annualInterest = loanBal > 0 ? loanBal * mortRate : 0;
+    const annualPrincipal = Math.min(monthlyRepay * 12 - annualInterest, loanBal);
+    loanBal = Math.max(loanBal - annualPrincipal, 0);
+    propValue *= (1 + propGrowth);
+    buyTotalPaid += monthlyRepay * 12 + ownCosts + maintenance;
+    const buyNW = propValue - loanBal;
+
+    // Rent: invest the difference
+    // Each year, renter invests: (mortgage repayment + ownCosts + maintenance) - (rent + insurance)
+    const buyAnnualCost = monthlyRepay * 12 + ownCosts + maintenance;
+    const rentAnnualCost = annualRent + rentInsurance;
+    const surplus = buyAnnualCost - rentAnnualCost;
+    rentPortfolio = rentPortfolio * (1 + afterTaxReturn) + Math.max(surplus, 0);
+    // If renting is more expensive, buying side doesn't invest difference (conservative)
+    rentTotalPaid += rentAnnualCost;
+    annualRent *= (1 + rentIncrease);
+
+    buyNetWorths.push(Math.round(buyNW));
+    rentNetWorths.push(Math.round(rentPortfolio));
+    buyPaidArr.push(Math.round(buyTotalPaid));
+    rentPaidArr.push(Math.round(rentTotalPaid));
+
+    if (!breakEven && buyNW >= rentPortfolio) breakEven = y;
+  }
+
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card" style="border-top-color:var(--blue)">
+      <div class="stat-label">Monthly mortgage</div>
+      <div class="stat-value" style="color:var(--blue)">$${Math.round(monthlyRepay).toLocaleString()}</div>
+      <div class="stat-sub">vs rent $${Math.round(weeklyRent * 52 / 12).toLocaleString()}/mo</div>
+    </div>
+    <div class="stat-card" style="border-top-color:${breakEven ? 'var(--gold)' : 'var(--red)'}">
+      <div class="stat-label">Break-even point</div>
+      <div class="stat-value" style="color:${breakEven ? 'var(--gold)' : 'var(--red)'}">${breakEven ? 'Year ' + breakEven : 'Beyond 30 years'}</div>
+      <div class="stat-sub">When buying net worth exceeds renting portfolio</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--blue)">
+      <div class="stat-label">Buy net worth (yr 10)</div>
+      <div class="stat-value" style="color:var(--blue)">$${(buyNetWorths[10]/1000).toFixed(0)}k</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--green)">
+      <div class="stat-label">Rent portfolio (yr 10)</div>
+      <div class="stat-value" style="color:var(--green)">$${(rentNetWorths[10]/1000).toFixed(0)}k</div>
+    </div>`;
+
+  const labels = Array.from({length:years+1},(_,i)=>'Yr '+i);
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('myChart'), {
+    type: 'line',
+    data: { labels, datasets: [
+      { label: 'Buy: Net Worth', data: buyNetWorths, borderColor: '#58a6ff', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
+      { label: 'Rent: Portfolio', data: rentNetWorths, borderColor: '#3fb950', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
+    ]},
+    options: {
+      responsive: true, animation: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { color: '#7d8590', font: { family: 'DM Sans', size: 12 }, boxWidth: 20 } }, tooltip: { backgroundColor: '#0d1117', borderColor: '#21262d', borderWidth: 1, titleColor: '#7d8590', bodyColor: '#e6edf3', callbacks: { label: c => ' ' + c.dataset.label + ': $' + c.parsed.y.toLocaleString() } } },
+      scales: { x: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 } }, grid: { color: '#21262d' } }, y: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 }, callback: v => '$' + (v>=1e6?(v/1e6).toFixed(1)+'M':(v/1000).toFixed(0)+'k') }, grid: { color: '#21262d' } } }
+    }
+  });
+
+  document.getElementById('tableBody').innerHTML = [1,2,3,5,7,10,15,20,25,30].map(y => {
+    const bNW = buyNetWorths[y], rNW = rentNetWorths[y];
+    const diff = bNW - rNW;
+    return `<tr style="${y===breakEven?'background:rgba(210,153,34,0.08)':''}">
+      <td>${y}${y===breakEven?' ⭐':''}</td>
+      <td style="color:var(--blue)">$${bNW.toLocaleString()}</td>
+      <td>$${buyPaidArr[y].toLocaleString()}</td>
+      <td style="color:var(--green)">$${rNW.toLocaleString()}</td>
+      <td>$${rentPaidArr[y].toLocaleString()}</td>
+      <td style="color:${diff>=0?'var(--blue)':'var(--green)'}${y===breakEven?';font-weight:600':''}">${diff>=0?'Buy':'Rent'} +$${Math.abs(diff).toLocaleString()}</td>
+    </tr>`;
+  }).join('');
+}
+
+IDS.forEach(id => document.getElementById(id).addEventListener('input', () => { save(); render(); }));
+document.getElementById('resetBtn').addEventListener('click', () => { if (!confirm('Reset?')) return; localStorage.removeItem(STORAGE_KEY); applyState(DEFAULTS); render(); });
+applyState(load() || DEFAULTS); render();
+</script>
+</body>
+</html>

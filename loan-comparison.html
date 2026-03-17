@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Loan Comparison — Finance Toolkit</title>
+  <link rel="stylesheet" href="shared.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    .loan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 640px) { .loan-grid { grid-template-columns: 1fr; } }
+    .loan-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; border-top: 3px solid var(--border); }
+    .loan-panel.a { border-top-color: var(--blue); }
+    .loan-panel.b { border-top-color: var(--green); }
+    .loan-title { font-size: 13px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    .loan-title .dot { width: 10px; height: 10px; border-radius: 50%; }
+  </style>
+</head>
+<body>
+<nav class="tool-nav"><a href="index.html" class="nav-back">&#8592; Finance Toolkit</a></nav>
+<div class="app">
+  <div class="header-row">
+    <div>
+      <h1>Loan Comparison</h1>
+      <p class="subtitle">Compare two mortgages side by side — rates, terms, offset, and repayment type.</p>
+    </div>
+    <div class="header-actions">
+      <button class="reset-btn" id="resetBtn">Reset</button>
+      <div class="save-indicator" id="saveInd"><div class="dot"></div> Saved</div>
+    </div>
+  </div>
+
+  <div class="loan-grid" style="margin-bottom:20px">
+    <div class="loan-panel a">
+      <div class="loan-title"><div class="dot" style="background:var(--blue)"></div> Loan A</div>
+      <div class="input-grid">
+        <div class="input-group"><label>Loan Amount</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="a_amount" value="600000" step="10000"></div></div>
+        <div class="input-group"><label>Interest Rate (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="a_rate" value="6.00" step="0.05"></div></div>
+        <div class="input-group"><label>Loan Term (years)</label><div class="input-wrap"><span class="pfx">yr</span><input type="number" id="a_term" value="30" step="1" min="1" max="30"></div></div>
+        <div class="input-group"><label>Type</label><select id="a_type" style="padding-left:10px"><option value="pi">P&amp;I</option><option value="io">Interest Only</option></select></div>
+        <div class="input-group"><label>Offset Balance</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="a_offset" value="50000" step="5000"></div></div>
+        <div class="input-group"><label>Annual Fees</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="a_fees" value="0" step="100"></div></div>
+      </div>
+    </div>
+    <div class="loan-panel b">
+      <div class="loan-title"><div class="dot" style="background:var(--green)"></div> Loan B</div>
+      <div class="input-grid">
+        <div class="input-group"><label>Loan Amount</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="b_amount" value="600000" step="10000"></div></div>
+        <div class="input-group"><label>Interest Rate (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="b_rate" value="5.70" step="0.05"></div></div>
+        <div class="input-group"><label>Loan Term (years)</label><div class="input-wrap"><span class="pfx">yr</span><input type="number" id="b_term" value="30" step="1" min="1" max="30"></div></div>
+        <div class="input-group"><label>Type</label><select id="b_type" style="padding-left:10px"><option value="pi">P&amp;I</option><option value="io">Interest Only</option></select></div>
+        <div class="input-group"><label>Offset Balance</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="b_offset" value="0" step="5000"></div></div>
+        <div class="input-group"><label>Annual Fees</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="b_fees" value="400" step="100"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats" id="statsRow"></div>
+  <div class="chart-wrap"><canvas id="myChart" height="280"></canvas></div>
+
+  <div class="panel" style="padding:0;overflow:hidden">
+    <div class="table-scroll">
+      <table><thead><tr id="tableHead"></tr></thead><tbody id="tableBody"></tbody></table>
+    </div>
+  </div>
+  <p class="footer">Comparison assumes constant interest rate over the loan term.</p>
+</div>
+
+<script>
+const STORAGE_KEY = 'loan-comparison-v1';
+const IDS = ['a_amount','a_rate','a_term','a_type','a_offset','a_fees','b_amount','b_rate','b_term','b_type','b_offset','b_fees'];
+const DEFAULTS = { a_amount:600000,a_rate:6,a_term:30,a_type:'pi',a_offset:50000,a_fees:0, b_amount:600000,b_rate:5.7,b_term:30,b_type:'pi',b_offset:0,b_fees:400 };
+
+let saveTimer = null;
+function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
+function save() { const s = {}; IDS.forEach(id => s[id] = document.getElementById(id).value); localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); flashSaved(); }
+function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } }
+function applyState(s) { IDS.forEach(id => { if (s[id] !== undefined) document.getElementById(id).value = s[id]; }); }
+function g(id) { return +document.getElementById(id).value || 0; }
+function gs(id) { return document.getElementById(id).value; }
+
+function calcLoan(amount, rate, termYears, type, offset, annualFees) {
+  const rm = rate / 100 / 12;
+  const n = termYears * 12;
+  const effectivePrincipal = Math.max(amount - offset, 0);
+
+  let monthlyRepay;
+  if (type === 'io') {
+    monthlyRepay = effectivePrincipal * rm;
+  } else {
+    monthlyRepay = rm === 0 ? effectivePrincipal / n : effectivePrincipal * rm * Math.pow(1+rm, n) / (Math.pow(1+rm, n) - 1);
+  }
+
+  // year-by-year balance and interest
+  const yearlyBalance = [amount], yearlyInterest = [0];
+  let bal = amount, totalInterest = 0;
+  for (let m = 1; m <= n; m++) {
+    const interest = Math.max(bal - offset, 0) * rm;
+    totalInterest += interest;
+    const principal = type === 'io' ? 0 : Math.min(monthlyRepay - interest, bal);
+    bal = Math.max(bal - principal, 0);
+    if (m % 12 === 0) { yearlyBalance.push(Math.round(bal)); yearlyInterest.push(Math.round(totalInterest)); }
+  }
+
+  return { monthlyRepay, totalInterest, yearlyBalance, yearlyInterest, totalCost: totalInterest + annualFees * termYears };
+}
+
+let chart = null;
+
+function render() {
+  const lA = calcLoan(g('a_amount'), g('a_rate'), g('a_term'), gs('a_type'), g('a_offset'), g('a_fees'));
+  const lB = calcLoan(g('b_amount'), g('b_rate'), g('b_term'), gs('b_type'), g('b_offset'), g('b_fees'));
+  const maxYears = Math.max(g('a_term'), g('b_term'));
+
+  const diffRepay = lA.monthlyRepay - lB.monthlyRepay;
+  const diffInterest = lA.totalInterest - lB.totalInterest;
+  const diffCost = lA.totalCost - lB.totalCost;
+  const cheaperLabel = diffCost <= 0 ? 'Loan A' : 'Loan B';
+  const cheaperColor = diffCost <= 0 ? 'var(--blue)' : 'var(--green)';
+
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card" style="border-top-color:var(--blue)">
+      <div class="stat-label">Loan A monthly repayment</div>
+      <div class="stat-value" style="color:var(--blue)">$${lA.monthlyRepay.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+      <div class="stat-sub">Total interest: $${lA.totalInterest.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--green)">
+      <div class="stat-label">Loan B monthly repayment</div>
+      <div class="stat-value" style="color:var(--green)">$${lB.monthlyRepay.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+      <div class="stat-sub">Total interest: $${lB.totalInterest.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+    </div>
+    <div class="stat-card" style="border-top-color:${cheaperColor}">
+      <div class="stat-label">Lower total cost</div>
+      <div class="stat-value" style="color:${cheaperColor}">${cheaperLabel}</div>
+      <div class="stat-sub">Saves $${Math.abs(diffCost).toLocaleString(undefined,{maximumFractionDigits:0})} over the term</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Monthly repayment diff</div>
+      <div class="stat-value" style="color:${diffRepay >= 0 ? 'var(--green)' : 'var(--blue)'}">${diffRepay >= 0 ? 'B saves' : 'A saves'} $${Math.abs(diffRepay).toLocaleString(undefined,{maximumFractionDigits:0})}/mo</div>
+    </div>`;
+
+  const labels = Array.from({length: maxYears + 1}, (_, i) => 'Yr ' + i);
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('myChart'), {
+    type: 'line',
+    data: { labels, datasets: [
+      { label: 'Loan A Balance', data: labels.map((_, i) => lA.yearlyBalance[i] ?? null), borderColor: '#58a6ff', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
+      { label: 'Loan B Balance', data: labels.map((_, i) => lB.yearlyBalance[i] ?? null), borderColor: '#3fb950', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
+    ]},
+    options: {
+      responsive: true, animation: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { color: '#7d8590', font: { family: 'DM Sans', size: 12 }, boxWidth: 20 } }, tooltip: { backgroundColor: '#0d1117', borderColor: '#21262d', borderWidth: 1, titleColor: '#7d8590', bodyColor: '#e6edf3', callbacks: { label: c => ' ' + c.dataset.label + ': $' + c.parsed.y.toLocaleString() } } },
+      scales: { x: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 } }, grid: { color: '#21262d' } }, y: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 }, callback: v => '$' + (v/1000).toFixed(0) + 'k' }, grid: { color: '#21262d' } } }
+    }
+  });
+
+  document.getElementById('tableHead').innerHTML = '<th>Year</th><th style="color:var(--blue)">A Balance</th><th style="color:var(--blue)">A Interest paid</th><th style="color:var(--green)">B Balance</th><th style="color:var(--green)">B Interest paid</th><th>Difference</th>';
+  const rows = [1,2,5,10,15,20,25,30].filter(y => y <= maxYears);
+  document.getElementById('tableBody').innerHTML = rows.map(y => {
+    const ab = lA.yearlyBalance[y] ?? 0, bb = lB.yearlyBalance[y] ?? 0;
+    const ai = lA.yearlyInterest[y] ?? lA.totalInterest, bi = lB.yearlyInterest[y] ?? lB.totalInterest;
+    const diff = ai - bi;
+    return `<tr><td>${y}</td><td>$${ab.toLocaleString()}</td><td>$${ai.toLocaleString()}</td><td>$${bb.toLocaleString()}</td><td>$${bi.toLocaleString()}</td><td style="color:${diff>=0?'var(--green)':'var(--blue)'}">A ${diff>=0?'pays more':'saves'} $${Math.abs(diff).toLocaleString()}</td></tr>`;
+  }).join('');
+}
+
+IDS.forEach(id => document.getElementById(id).addEventListener('input', () => { save(); render(); }));
+document.getElementById('resetBtn').addEventListener('click', () => { if (!confirm('Reset?')) return; localStorage.removeItem(STORAGE_KEY); applyState(DEFAULTS); render(); });
+applyState(load() || DEFAULTS); render();
+</script>
+</body>
+</html>

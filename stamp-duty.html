@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stamp Duty — Finance Toolkit</title>
+  <link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+<nav class="tool-nav"><a href="index.html" class="nav-back">&#8592; Finance Toolkit</a></nav>
+<div class="app">
+  <div class="header-row">
+    <div>
+      <h1>Stamp Duty Calculator</h1>
+      <p class="subtitle">Calculate transfer duty for all Australian states and territories. Includes first home buyer concessions.</p>
+    </div>
+    <div class="header-actions">
+      <button class="reset-btn" id="resetBtn">Reset</button>
+      <div class="save-indicator" id="saveInd"><div class="dot"></div> Saved</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="input-grid">
+      <div class="input-group"><label>State / Territory</label><select id="state" style="padding-left:10px">
+        <option value="NSW">New South Wales</option>
+        <option value="VIC">Victoria</option>
+        <option value="QLD">Queensland</option>
+        <option value="WA">Western Australia</option>
+        <option value="SA">South Australia</option>
+        <option value="TAS">Tasmania</option>
+        <option value="ACT">Australian Capital Territory</option>
+        <option value="NT">Northern Territory</option>
+      </select></div>
+      <div class="input-group"><label>Purchase Price</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="price" value="700000" step="10000"></div></div>
+      <div class="input-group"><label>Purchaser Type</label><select id="purchaserType" style="padding-left:10px">
+        <option value="owner">Owner-Occupier</option>
+        <option value="fhb">First Home Buyer</option>
+        <option value="investor">Investor</option>
+        <option value="foreign">Foreign Purchaser</option>
+      </select></div>
+      <div class="input-group"><label>Property Type</label><select id="propType" style="padding-left:10px">
+        <option value="established">Established Home</option>
+        <option value="new">New Home</option>
+        <option value="vacant">Vacant Land</option>
+      </select></div>
+    </div>
+  </div>
+
+  <div class="stats" id="statsRow"></div>
+
+  <div class="panel">
+    <div class="section-title">Breakdown</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px"><tbody id="breakdown"></tbody></table>
+  </div>
+
+  <div class="panel" style="background:rgba(88,166,255,0.05);border-color:rgba(88,166,255,0.2)">
+    <div id="stateNotes" style="font-size:13px;color:var(--muted);line-height:1.6"></div>
+  </div>
+
+  <p class="footer">Rates are approximate and may not reflect recent legislative changes. Always verify with the relevant state revenue office.</p>
+</div>
+
+<script>
+const STORAGE_KEY = 'stamp-duty-v1';
+const IDS = ['state','price','purchaserType','propType'];
+const DEFAULTS = { state:'NSW', price:700000, purchaserType:'owner', propType:'established' };
+
+let saveTimer = null;
+function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
+function save() { const s = {}; IDS.forEach(id => s[id] = document.getElementById(id).value); localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); flashSaved(); }
+function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } }
+function applyState(s) { IDS.forEach(id => { if (s[id] !== undefined) document.getElementById(id).value = s[id]; }); }
+function g(id) { return +document.getElementById(id).value || 0; }
+function gs(id) { return document.getElementById(id).value; }
+
+function calcBrackets(price, brackets) {
+  let duty = 0;
+  for (const [limit, base, rate, threshold] of brackets) {
+    if (price > threshold) {
+      const taxable = Math.min(price, limit) - threshold;
+      duty = base + taxable * rate;
+    }
+    if (price <= limit) break;
+  }
+  return duty;
+}
+
+// brackets: [upper, base, marginalRate, lower]
+const RATES = {
+  NSW: {
+    standard: [[14000,0,0.0125,0],[32000,175,0.015,14000],[85000,445,0.0175,32000],[319000,1368,0.035,85000],[1064999,9582,0.045,319000],[3000000,43147,0.055,1064999],[Infinity,149892,0.07,3000000]],
+    fhbExemptBelow: 800000,
+    fhbConcessionBelow: 1000000,
+    fhbNote: 'FHB exemption on new/existing homes up to $800k. Concession $800k–$1M.',
+    foreignSurcharge: 0.08,
+  },
+  VIC: {
+    standard: [[25000,0,0.014,0],[130000,350,0.024,25000],[960000,2870,0.06,130000],[2000000,52070,0.11,960000],[Infinity,166270,0.055,2000000]],
+    fhbExemptBelow: 600000,
+    fhbConcessionBelow: 750000,
+    fhbNote: 'FHB exemption up to $600k. Concession $600k–$750k.',
+    foreignSurcharge: 0.08,
+  },
+  QLD: {
+    standard: [[5000,0,0.015,0],[75000,75,0.035,5000],[540000,2525,0.045,75000],[1000000,23300,0.0575,540000],[Infinity,49775,0.0575,1000000]],
+    fhbExemptBelow: 500000,
+    fhbConcessionBelow: 550000,
+    fhbNote: 'FHB concessional rate on homes up to $550k.',
+    foreignSurcharge: 0.08,
+  },
+  WA: {
+    standard: [[120000,0,0.019,0],[150000,2280,0.0285,120000],[360000,3135,0.03,150000],[725000,9435,0.05,360000],[Infinity,27685,0.051,725000]],
+    fhbExemptBelow: 430000,
+    fhbConcessionBelow: 530000,
+    fhbNote: 'FHB exemption up to $430k. Concession up to $530k.',
+    foreignSurcharge: 0.07,
+  },
+  SA: {
+    standard: [[12000,0,0.01,0],[30000,120,0.02,12000],[50000,480,0.03,30000],[100000,1080,0.035,50000],[200000,2830,0.04,100000],[250000,6830,0.0425,200000],[300000,8955,0.0475,250000],[500000,11330,0.05,300000],[Infinity,21330,0.055,500000]],
+    fhbExemptBelow: 0,
+    fhbConcessionBelow: 0,
+    fhbNote: 'SA does not have a stamp duty exemption for first home buyers. First Home Owner Grant may apply.',
+    foreignSurcharge: 0.07,
+  },
+  TAS: {
+    standard: [[3000,0,0.0175,0],[25000,52.5,0.02,3000],[75000,492.5,0.0225,25000],[200000,1617.5,0.035,75000],[375000,5992.5,0.04,200000],[725000,12992.5,0.0425,375000],[Infinity,27867.5,0.045,725000]],
+    fhbExemptBelow: 0,
+    fhbConcessionBelow: 0,
+    fhbNote: 'TAS offers a 50% concession for FHBs on new homes valued up to $600k.',
+    foreignSurcharge: 0,
+  },
+  ACT: {
+    standard: [[200000,0,0.0206,0],[300000,4120,0.038,200000],[500000,7920,0.0467,300000],[750000,17260,0.0497,500000],[1455000,29685,0.055,750000],[Infinity,68460,0.057,1455000]],
+    fhbExemptBelow: 0,
+    fhbConcessionBelow: 0,
+    fhbNote: 'ACT has a Home Buyer Concession Scheme (HBCS) based on income and property value thresholds.',
+    foreignSurcharge: 0,
+  },
+  NT: {
+    standard: [[525000,0,null,0],[Infinity,0,null,0]], // NT uses a formula
+    fhbExemptBelow: 0,
+    fhbConcessionBelow: 0,
+    fhbNote: 'NT calculates duty using a formula. FHB grant available but no general duty exemption.',
+    foreignSurcharge: 0,
+    custom: (price) => {
+      // NT formula: V = dutiable value
+      const v = price;
+      if (v <= 525000) return (0.06571441 * v + 15) * v / 1000;
+      return v * 0.0495;
+    }
+  },
+};
+
+function calcDuty(state, price, purchaserType, propType) {
+  const s = RATES[state];
+  let duty = s.custom ? s.custom(price) : calcBrackets(price, s.standard);
+
+  // FHB concessions
+  if (purchaserType === 'fhb') {
+    if (s.fhbExemptBelow > 0 && price <= s.fhbExemptBelow) {
+      duty = 0;
+    } else if (s.fhbConcessionBelow > 0 && price <= s.fhbConcessionBelow && s.fhbExemptBelow > 0) {
+      // Partial concession: linear phase-out
+      const fullDuty = duty;
+      const pct = (price - s.fhbExemptBelow) / (s.fhbConcessionBelow - s.fhbExemptBelow);
+      duty = fullDuty * pct;
+    }
+  }
+
+  // Foreign surcharge
+  let foreignSurcharge = 0;
+  if (purchaserType === 'foreign' && s.foreignSurcharge > 0) {
+    foreignSurcharge = price * s.foreignSurcharge;
+  }
+
+  return { duty: Math.round(duty), foreignSurcharge: Math.round(foreignSurcharge), total: Math.round(duty + foreignSurcharge) };
+}
+
+function render() {
+  const state = gs('state'), price = g('price');
+  const purchaserType = gs('purchaserType'), propType = gs('propType');
+  const { duty, foreignSurcharge, total } = calcDuty(state, price, purchaserType, propType);
+  const effectiveRate = price > 0 ? (total / price * 100) : 0;
+
+  // Upfront costs estimate
+  const legalFees = 2000;
+  const buildingInspection = 600;
+  const lmi = 0; // not calculated here
+  const totalUpfront = total + legalFees + buildingInspection;
+
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card" style="border-top-color:var(--red)">
+      <div class="stat-label">Stamp Duty</div>
+      <div class="stat-value" style="color:var(--red)">$${duty.toLocaleString()}</div>
+      <div class="stat-sub">Effective rate: ${effectiveRate.toFixed(2)}%</div>
+    </div>
+    ${foreignSurcharge > 0 ? `<div class="stat-card" style="border-top-color:var(--red)"><div class="stat-label">Foreign Surcharge</div><div class="stat-value" style="color:var(--red)">$${foreignSurcharge.toLocaleString()}</div></div>` : ''}
+    <div class="stat-card" style="border-top-color:var(--gold)">
+      <div class="stat-label">Total Duty</div>
+      <div class="stat-value" style="color:var(--gold)">$${total.toLocaleString()}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Est. total upfront costs</div>
+      <div class="stat-value">$${totalUpfront.toLocaleString()}</div>
+      <div class="stat-sub">Incl. ~$2.6k legal/inspection</div>
+    </div>`;
+
+  const row = (l, v, c, b) => `<tr><td style="padding:8px 4px;color:var(--muted);border-bottom:1px solid var(--border)">${l}</td><td style="padding:8px 4px;text-align:right;font-family:'DM Mono',monospace;border-bottom:1px solid var(--border);color:${c||'var(--text)'};font-weight:${b?600:400}">${v}</td></tr>`;
+
+  document.getElementById('breakdown').innerHTML = [
+    row('Purchase price', '$' + price.toLocaleString()),
+    row('State / Territory', state),
+    row('Purchaser type', {'owner':'Owner-Occupier','fhb':'First Home Buyer','investor':'Investor','foreign':'Foreign Purchaser'}[purchaserType]),
+    row('Transfer duty', '$' + duty.toLocaleString(), 'var(--red)', true),
+    foreignSurcharge > 0 ? row('Foreign surcharge', '$' + foreignSurcharge.toLocaleString(), 'var(--red)') : '',
+    row('Total duty', '$' + total.toLocaleString(), 'var(--gold)', true),
+    row('Est. legal fees', '~$2,000', 'var(--muted)'),
+    row('Est. building inspection', '~$600', 'var(--muted)'),
+    row('Est. total upfront', '~$' + totalUpfront.toLocaleString(), 'var(--text)', true),
+  ].filter(Boolean).join('');
+
+  document.getElementById('stateNotes').innerHTML = `<strong style="color:var(--text)">${state} notes:</strong> ${RATES[state].fhbNote}`;
+}
+
+IDS.forEach(id => document.getElementById(id).addEventListener('input', () => { save(); render(); }));
+document.getElementById('resetBtn').addEventListener('click', () => { if (!confirm('Reset?')) return; localStorage.removeItem(STORAGE_KEY); applyState(DEFAULTS); render(); });
+applyState(load() || DEFAULTS); render();
+</script>
+</body>
+</html>
