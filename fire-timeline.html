@@ -27,6 +27,7 @@
       <div class="input-group"><label>Annual Income</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="income" value="120000" step="5000"></div></div>
       <div class="input-group"><label>Annual Spend</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="spend" value="70000" step="5000"></div></div>
       <div class="input-group"><label>Current Age</label><div class="input-wrap"><span class="pfx">yr</span><input type="number" id="age" value="32" step="1" min="18" max="80"></div></div>
+      <div class="input-group"><label>Current Year</label><div class="input-wrap"><span class="pfx">#</span><input type="number" id="startYear" value="2026" step="1" min="2000" max="2100"></div></div>
     </div>
     <div class="sep"></div>
     <div class="section-title">Assumptions</div>
@@ -43,7 +44,7 @@
 
   <div class="panel" style="padding:0;overflow:hidden">
     <div class="table-scroll">
-      <table><thead><tr><th>Year</th><th>Age</th><th>Net Worth</th><th>Annual Savings</th><th>FI Target</th><th>Progress</th></tr></thead>
+      <table><thead><tr><th>Calendar Year</th><th>Age</th><th>Net Worth</th><th>Annual Savings</th><th>FI Target</th><th>Progress</th></tr></thead>
       <tbody id="tableBody"></tbody>
     </table></div>
   </div>
@@ -52,8 +53,8 @@
 
 <script>
 const STORAGE_KEY = 'fire-timeline-v1';
-const IDS = ['netWorth','income','spend','age','growthRate','retireRate','withdrawRate','inflation'];
-const DEFAULTS = { netWorth:200000, income:120000, spend:70000, age:32, growthRate:8, retireRate:6, withdrawRate:4, inflation:3 };
+const IDS = ['netWorth','income','spend','age','growthRate','retireRate','withdrawRate','inflation','startYear'];
+const DEFAULTS = { netWorth:200000, income:120000, spend:70000, age:32, growthRate:8, retireRate:6, withdrawRate:4, inflation:3, startYear:2026 };
 
 let saveTimer = null;
 function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
@@ -76,6 +77,7 @@ function render() {
   const savingsRate = income > 0 ? (annualSavings / income * 100) : 0;
 
   // Year-by-year accumulation
+  const sy = parseInt(document.getElementById('startYear')?.value) || 2026;
   const years = [], worths = [], targets = [];
   let bal = nw, target = fiTarget, fireYear = null;
 
@@ -114,7 +116,7 @@ function render() {
     <div class="stat-card" style="border-top-color:var(--green)">
       <div class="stat-label">FIRE Date</div>
       <div class="stat-value" style="color:var(--green)">${fireAge ? 'Age ' + fireAge : 'Not in 60 yrs'}</div>
-      <div class="stat-sub">${yearsToFire !== null ? yearsToFire + ' years from now' : '—'}</div>
+      <div class="stat-sub">${yearsToFire !== null ? (sy + yearsToFire) + ' · ' + yearsToFire + ' years away' : '—'}</div>
     </div>
     <div class="stat-card" style="border-top-color:var(--blue)">
       <div class="stat-label">Annual Savings</div>
@@ -147,7 +149,7 @@ function render() {
     const pct = Math.min(w / t * 100, 100);
     const isFire = y === fireYear;
     return `<tr style="${isFire ? 'background:rgba(210,153,34,0.08)' : ''}">
-      <td>${y}${isFire ? ' 🔥' : ''}</td>
+      <td>${sy + y}${isFire ? ' 🔥' : ''}</td>
       <td>${age + y}</td>
       <td style="color:var(--blue);font-weight:${isFire?600:400}">$${w.toLocaleString()}</td>
       <td style="color:var(--green)">$${annualSavings.toLocaleString()}</td>

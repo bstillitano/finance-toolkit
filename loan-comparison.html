@@ -39,6 +39,13 @@
         <div class="input-group"><label>Type</label><select id="a_type" style="padding-left:10px"><option value="pi">P&amp;I</option><option value="io">Interest Only</option></select></div>
         <div class="input-group"><label>Offset Balance</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="a_offset" value="50000" step="5000"></div></div>
         <div class="input-group"><label>Annual Fees</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="a_fees" value="0" step="100"></div></div>
+        <div class="input-group"><label>Start Month</label><div class="input-wrap" style="padding-left:0"><select id="startMonth" style="padding-left:10px">
+          <option value="1">January</option><option value="2">February</option><option value="3" selected>March</option>
+          <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+          <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+          <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+        </select></div></div>
+        <div class="input-group"><label>Start Year</label><div class="input-wrap"><span class="pfx">#</span><input type="number" id="startYear" value="2026" step="1" min="2000" max="2100"></div></div>
       </div>
     </div>
     <div class="loan-panel b">
@@ -67,8 +74,8 @@
 
 <script>
 const STORAGE_KEY = 'loan-comparison-v1';
-const IDS = ['a_amount','a_rate','a_term','a_type','a_offset','a_fees','b_amount','b_rate','b_term','b_type','b_offset','b_fees'];
-const DEFAULTS = { a_amount:600000,a_rate:6,a_term:30,a_type:'pi',a_offset:50000,a_fees:0, b_amount:600000,b_rate:5.7,b_term:30,b_type:'pi',b_offset:0,b_fees:400 };
+const IDS = ['a_amount','a_rate','a_term','a_type','a_offset','a_fees','b_amount','b_rate','b_term','b_type','b_offset','b_fees','startMonth','startYear'];
+const DEFAULTS = { a_amount:600000,a_rate:6,a_term:30,a_type:'pi',a_offset:50000,a_fees:0, b_amount:600000,b_rate:5.7,b_term:30,b_type:'pi',b_offset:0,b_fees:400, startMonth:3, startYear:2026 };
 
 let saveTimer = null;
 function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
@@ -138,7 +145,9 @@ function render() {
       <div class="stat-value" style="color:${diffRepay >= 0 ? 'var(--green)' : 'var(--blue)'}">${diffRepay >= 0 ? 'B saves' : 'A saves'} $${Math.abs(diffRepay).toLocaleString(undefined,{maximumFractionDigits:0})}/mo</div>
     </div>`;
 
-  const labels = Array.from({length: maxYears + 1}, (_, i) => 'Yr ' + i);
+  const sm = parseInt(document.getElementById('startMonth')?.value) || 3;
+  const sy = parseInt(document.getElementById('startYear')?.value) || 2026;
+  const labels = Array.from({length: maxYears + 1}, (_, i) => { const d = new Date(sy, sm - 1 + i * 12, 1); return d.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' }); });
   if (chart) chart.destroy();
   chart = new Chart(document.getElementById('myChart'), {
     type: 'line',
@@ -153,9 +162,10 @@ function render() {
     }
   });
 
-  document.getElementById('tableHead').innerHTML = '<th>Year</th><th style="color:var(--blue)">A Balance</th><th style="color:var(--blue)">A Interest paid</th><th style="color:var(--green)">B Balance</th><th style="color:var(--green)">B Interest paid</th><th>Difference</th>';
+  document.getElementById('tableHead').innerHTML = '<th>Date</th><th style="color:var(--blue)">A Balance</th><th style="color:var(--blue)">A Interest paid</th><th style="color:var(--green)">B Balance</th><th style="color:var(--green)">B Interest paid</th><th>Difference</th>';
   const rows = [1,2,5,10,15,20,25,30].filter(y => y <= maxYears);
   document.getElementById('tableBody').innerHTML = rows.map(y => {
+    const rowLabel = new Date(sy, sm - 1 + y * 12, 1).toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
     const ab = lA.yearlyBalance[y] ?? 0, bb = lB.yearlyBalance[y] ?? 0;
     const ai = lA.yearlyInterest[y] ?? lA.totalInterest, bi = lB.yearlyInterest[y] ?? lB.totalInterest;
     const diff = ai - bi;

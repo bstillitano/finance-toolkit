@@ -33,6 +33,7 @@
         <option value="cgt">Capital growth (50% CGT discount)</option>
       </select></div></div>
       <div class="input-group"><label>Marginal Tax Rate (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="taxRate" value="37" step="1" min="0" max="47"></div></div>
+      <div class="input-group"><label>Start Year</label><div class="input-wrap"><span class="pfx">#</span><input type="number" id="startYear" value="2026" step="1" min="2000" max="2100"></div></div>
     </div>
   </div>
 
@@ -50,8 +51,8 @@
 
 <script>
 const STORAGE_KEY = 'compound-growth-v1';
-const IDS = ['lumpSum','monthly','returnRate','years','taxType','taxRate'];
-const DEFAULTS = { lumpSum: 50000, monthly: 2000, returnRate: 8, years: 20, taxType: 'none', taxRate: 37 };
+const IDS = ['lumpSum','monthly','returnRate','years','taxType','taxRate','startYear'];
+const DEFAULTS = { lumpSum: 50000, monthly: 2000, returnRate: 8, years: 20, taxType: 'none', taxRate: 37, startYear: 2026 };
 
 let saveTimer = null;
 function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
@@ -112,7 +113,8 @@ function render() {
       <div class="stat-value" style="color:var(--gold)">${(finalBal / totalContrib).toFixed(2)}x</div>
     </div>`;
 
-  const labels = Array.from({length: yrs + 1}, (_, i) => 'Yr ' + i);
+  const sy = parseInt(document.getElementById('startYear')?.value) || 2026;
+  const labels = Array.from({length: yrs + 1}, (_, i) => i === 0 ? String(sy) : String(sy + i));
   const cfg = {
     type: 'line',
     data: { labels, datasets: [
@@ -138,7 +140,7 @@ function render() {
   if (!tableYears.includes(yrs)) tableYears.push(yrs);
   document.getElementById('tableBody').innerHTML = tableYears.map(y => {
     const b = balances[y], c = contribs[y], g2 = b - c;
-    return `<tr><td>${y}</td><td>$${c.toLocaleString()}</td><td style="color:var(--blue);font-weight:600">$${b.toLocaleString()}</td><td style="color:var(--green)">$${g2.toLocaleString()}</td><td style="color:var(--green)">${((g2/c)*100).toFixed(1)}%</td></tr>`;
+    return `<tr><td>${sy + y}</td><td>$${c.toLocaleString()}</td><td style="color:var(--blue);font-weight:600">$${b.toLocaleString()}</td><td style="color:var(--green)">$${g2.toLocaleString()}</td><td style="color:var(--green)">${((g2/c)*100).toFixed(1)}%</td></tr>`;
   }).join('');
 }
 

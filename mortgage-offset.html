@@ -141,6 +141,13 @@
       <div class="input-group"><label>Offset Balance</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="offsetBal" step="5000"></div></div>
       <div class="input-group"><label>Interest Rate</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="rate" step="0.05"></div></div>
       <div class="input-group"><label>Weekly Repayment</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="weeklyRepay" step="50"></div></div>
+      <div class="input-group"><label>Start Month</label><div class="input-wrap" style="padding-left:0"><select id="startMonth" style="padding-left:10px">
+        <option value="1">January</option><option value="2">February</option><option value="3" selected>March</option>
+        <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+        <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+        <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+      </select></div></div>
+      <div class="input-group"><label>Start Year</label><div class="input-wrap"><span class="pfx">#</span><input type="number" id="startYear" value="2026" step="1" min="2000" max="2100"></div></div>
     </div>
   </div>
 
@@ -197,6 +204,8 @@ const DEFAULTS = {
   offset: 80000,
   rate: 6.00,
   weeklyRepay: 900,
+  startMonth: 3,
+  startYear: 2026,
   windfalls: [
     { id: 1, label: 'Bonus / gift', amount: 20000, month: 3 },
   ],
@@ -217,6 +226,8 @@ function saveState() {
     offset:      +document.getElementById('offsetBal').value  || 0,
     rate:        +document.getElementById('rate').value       || 0,
     weeklyRepay: +document.getElementById('weeklyRepay').value|| 0,
+    startMonth:  +document.getElementById('startMonth').value  || 3,
+    startYear:   +document.getElementById('startYear').value   || 2026,
     windfalls,
     scenarios,
     nextWId,
@@ -241,6 +252,8 @@ function applyState(state) {
   document.getElementById('offsetBal').value  = state.offset;
   document.getElementById('rate').value       = state.rate;
   document.getElementById('weeklyRepay').value = state.weeklyRepay;
+  if (state.startMonth) document.getElementById('startMonth').value = state.startMonth;
+  if (state.startYear)  document.getElementById('startYear').value  = state.startYear;
   windfalls = state.windfalls;
   scenarios = state.scenarios;
   nextWId   = state.nextWId   ?? (Math.max(0, ...windfalls.map(w => w.id))  + 1);
@@ -259,7 +272,9 @@ function flashSaved() {
 function fmtK(v) { return '$' + (v / 1000).toFixed(1) + 'k'; }
 
 function monthLabel(m) {
-  const d = new Date(2026, 2 + m, 1);
+  const sm = (parseInt(document.getElementById('startMonth')?.value) || 3) - 1;
+  const sy = parseInt(document.getElementById('startYear')?.value) || 2026;
+  const d = new Date(sy, sm + m, 1);
   return d.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
 }
 
@@ -467,7 +482,7 @@ function render() {
         },
       },
       scales: {
-        x: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 }, maxTicksLimit: 20 }, grid: { color: '#21262d' }, title: { display: true, text: 'Months from March 2026', color: '#7d8590', font: { size: 11 } } },
+        x: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 }, maxTicksLimit: 20 }, grid: { color: '#21262d' }, title: { display: true, text: 'Months from ' + monthLabel(0), color: '#7d8590', font: { size: 11 } } },
         y: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 }, callback: v => '$' + (v/1000).toFixed(0) + 'k' }, grid: { color: '#21262d' } }
       }
     }
