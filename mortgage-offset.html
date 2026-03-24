@@ -295,7 +295,8 @@ function generateData(loan, offsetStart, rateAnnual, repayWeekly, monthlyAdd, wf
   for (let m = 0; m <= 600; m++) {
     wfList.forEach(wf => { if (wf.amount > 0 && wf.month === m) off += wf.amount; });
     const eff = Math.max(lb - off, 0);
-    data.push({ month: m, loan: Math.round(lb), offset: Math.round(off), effective: Math.round(eff) });
+    const monthlyInterest = Math.round(eff * rm);
+    data.push({ month: m, loan: Math.round(lb), offset: Math.round(off), effective: Math.round(eff), interest: monthlyInterest });
     if (lb <= 0) break;
     const interest = eff * rm;
     const principal = Math.min(repayM - interest, lb);
@@ -410,9 +411,15 @@ function render() {
 
   // ── stat cards ──
   const effNow = Math.max(loan - offset, 0);
+  const interestNow = Math.round(effNow * (rate / 100 / 12));
   let statsHtml = `<div class="stat-card">
     <div class="stat-label">Effective balance today</div>
     <div class="stat-value" style="color:#e6edf3">${fmtK(effNow)}</div>
+  </div>
+  <div class="stat-card" style="border-top-color:var(--red)">
+    <div class="stat-label">Monthly interest today</div>
+    <div class="stat-value" style="color:var(--red)">$${interestNow.toLocaleString()}</div>
+    <div class="stat-sub">$${(interestNow*12).toLocaleString()} p.a.</div>
   </div>`;
 
   if (windfalls.length > 0) {
@@ -497,7 +504,8 @@ function render() {
     scenarios.map((s, idx) => {
       const c = colorFor(idx), lbl = s.label || ('Scenario ' + (idx+1));
       return `<th style="color:${c}">${lbl}<br><span style="font-weight:400;color:var(--muted)">Offset</span></th>` +
-             `<th style="color:${c}">${lbl}<br><span style="font-weight:400;color:var(--muted)">Effective</span></th>`;
+             `<th style="color:${c}">${lbl}<br><span style="font-weight:400;color:var(--muted)">Effective</span></th>` +
+             `<th style="color:${c}">${lbl}<br><span style="font-weight:400;color:var(--muted)">Interest/mo</span></th>`;
     }).join('');
 
   document.getElementById('tableBody').innerHTML = milestones.map(m => {
@@ -517,6 +525,7 @@ function render() {
       const effDone = d.effective === 0;
       tds += `<td>${fmtK(d.offset)}</td>`;
       tds += `<td style="color:${effDone ? color : 'var(--text)'};font-weight:${effDone?600:400}">${effDone ? '&#10003; $0' : fmtK(d.effective)}</td>`;
+      tds += `<td style="color:${d.interest === 0 ? color : 'var(--red)'}">${d.interest === 0 ? '&#10003; $0' : '$' + d.interest.toLocaleString()}</td>`;
     });
     return `<tr class="${isDone ? 'loan-done-row' : isW ? 'windfall-row' : ''}">${tds}</tr>`;
   }).join('');
