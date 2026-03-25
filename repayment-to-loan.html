@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Repayment to Loan Size — Finance Toolkit</title>
+  <link rel="stylesheet" href="shared.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<nav class="tool-nav"><a href="index.html" class="nav-back">&#8592; Finance Toolkit</a></nav>
+<div class="app">
+  <div class="header-row">
+    <div>
+      <h1>Repayment to Loan Size</h1>
+      <p class="subtitle">Enter what you can afford to repay each week or month and see the maximum loan you could service.</p>
+    </div>
+    <div class="header-actions">
+      <button class="reset-btn" id="resetBtn">Reset</button>
+      <div class="save-indicator" id="saveInd"><div class="dot"></div> Saved</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="section-title">Your Repayment Budget</div>
+    <div class="input-grid">
+      <div class="input-group"><label>Repayment Amount</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="repayment" value="2000" step="50"></div></div>
+      <div class="input-group"><label>Frequency</label>
+        <select id="frequency" style="padding-left:10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;width:100%;padding:8px 10px;outline:none;cursor:pointer;-webkit-appearance:none;appearance:none">
+          <option value="weekly">Weekly</option>
+          <option value="fortnightly">Fortnightly</option>
+          <option value="monthly" selected>Monthly</option>
+        </select>
+      </div>
+      <div class="input-group"><label>Interest Rate (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="rate" value="6.00" step="0.05"></div></div>
+      <div class="input-group"><label>Loan Term (years)</label><div class="input-wrap"><span class="pfx">yr</span><input type="number" id="term" value="30" step="1" min="1" max="40"></div></div>
+      <div class="input-group"><label>Offset Balance</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="offset" value="0" step="5000"></div></div>
+    </div>
+  </div>
+
+  <!-- Primary result -->
+  <div class="stats" id="statsRow"></div>
+
+  <!-- Rate sensitivity table -->
+  <div class="panel" style="margin-bottom:20px">
+    <div class="section-title">Rate Sensitivity</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:14px">How your maximum loan changes at different interest rates, keeping the same repayment.</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th style="text-align:left">Rate</th>
+          <th>Max Loan</th>
+          <th>Total Interest</th>
+          <th>Total Repaid</th>
+          <th>vs. Current Rate</th>
+        </tr></thead>
+        <tbody id="rateTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Term sensitivity chart -->
+  <div class="chart-wrap"><canvas id="myChart" height="280"></canvas></div>
+
+  <p class="footer">Figures are approximate. Does not account for lender fees, LMI, or serviceability assessments.</p>
+</div>
+
+<script>
+const STORAGE_KEY = 'repayment-to-loan-v1';
+const IDS = ['repayment','frequency','rate','term','offset'];
+const DEFAULTS = { repayment: 2000, frequency: 'monthly', rate: 6.00, term: 30, offset: 0 };
+
+let saveTimer = null;
+function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
+function save() { const s = {}; IDS.forEach(id => s[id] = document.getElementById(id).value); localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); flashSaved(); }
+function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } }
+function applyState(s) { IDS.forEach(id => { if (s[id] !== undefined) document.getElementById(id).value = s[id]; }); }
+function g(id) { return +document.getElementById(id).value || 0; }
+function gs(id) { return document.getElementById(id).value; }
+
+function toMonthly(amount, freq) {
+  if (freq === 'weekly')      return amount * 52 / 12;
+  if (freq === 'fortnightly') return amount * 26 / 12;
+  return amount;
+}
+
+// Solve for loan principal given monthly repayment, monthly rate, n months
+function loanFromRepayment(monthlyRepay, monthlyRate, n) {
+  if (monthlyRate === 0) return monthlyRepay * n;
+  return monthlyRepay * (1 - Math.pow(1 + monthlyRate, -n)) / monthlyRate;
+}
+
+function totalInterest(principal, monthlyRepay, n) {
+  return Math.max(0, monthlyRepay * n - principal);
+}
+
+let chart = null;
+
+function render() {
+  const repay = g('repayment');
+  const freq  = gs('frequency');
+  const rate  = g('rate');
+  const term  = g('term');
+  const offset = g('offset');
+
+  const monthlyRepay = toMonthly(repay, freq);
+  const rm = rate / 100 / 12;
+  const n  = term * 12;
+
+  // Max loan at face value, then add offset (offset reduces effective balance,
+  // so you can borrow offset amount more for the same repayment)
+  const baseLoan   = loanFromRepayment(monthlyRepay, rm, n);
+  const maxLoan    = baseLoan + offset;
+  const totInterest = totalInterest(baseLoan, monthlyRepay, n);
+  const totRepaid   = monthlyRepay * n;
+  const effRate     = baseLoan > 0 ? (totInterest / baseLoan * 100) : 0;
+
+  // Purchase price at different LVRs
+  const p80 = maxLoan / 0.80;
+  const p90 = maxLoan / 0.90;
+
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card" style="border-top-color:var(--blue)">
+      <div class="stat-label">Maximum loan</div>
+      <div class="stat-value" style="color:var(--blue)">$${Math.round(maxLoan).toLocaleString()}</div>
+      <div class="stat-sub">${offset > 0 ? 'Incl. $' + offset.toLocaleString() + ' offset benefit' : 'At ' + rate + '% for ' + term + ' yrs'}</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--green)">
+      <div class="stat-label">Max purchase (80% LVR)</div>
+      <div class="stat-value" style="color:var(--green)">$${Math.round(p80).toLocaleString()}</div>
+      <div class="stat-sub">Requires $${Math.round(p80 * 0.2).toLocaleString()} deposit</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--gold)">
+      <div class="stat-label">Max purchase (90% LVR)</div>
+      <div class="stat-value" style="color:var(--gold)">$${Math.round(p90).toLocaleString()}</div>
+      <div class="stat-sub">Requires $${Math.round(p90 * 0.1).toLocaleString()} deposit + LMI</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--red)">
+      <div class="stat-label">Total interest over term</div>
+      <div class="stat-value" style="color:var(--red)">$${Math.round(totInterest).toLocaleString()}</div>
+      <div class="stat-sub">Total repaid: $${Math.round(totRepaid).toLocaleString()}</div>
+    </div>`;
+
+  // Rate sensitivity table
+  const rates = [3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0];
+  document.getElementById('rateTable').innerHTML = rates.map(r => {
+    const rm2 = r / 100 / 12;
+    const loan2 = loanFromRepayment(monthlyRepay, rm2, n) + offset;
+    const ti2   = totalInterest(loan2 - offset, monthlyRepay, n);
+    const diff  = loan2 - maxLoan;
+    const isCurrent = Math.abs(r - rate) < 0.01;
+    return `<tr style="${isCurrent ? 'background:rgba(88,166,255,0.08)' : ''}">
+      <td style="text-align:left;color:${isCurrent ? 'var(--blue)' : 'var(--muted)'};font-weight:${isCurrent ? 600 : 400}">${r.toFixed(1)}%${isCurrent ? ' ←' : ''}</td>
+      <td style="color:var(--blue);font-weight:${isCurrent ? 600 : 400}">$${Math.round(loan2).toLocaleString()}</td>
+      <td style="color:var(--red)">$${Math.round(ti2).toLocaleString()}</td>
+      <td>$${Math.round(monthlyRepay * n).toLocaleString()}</td>
+      <td style="color:${diff >= 0 ? 'var(--green)' : 'var(--red)'}">${diff >= 0 ? '+' : ''}$${Math.round(diff).toLocaleString()}</td>
+    </tr>`;
+  }).join('');
+
+  // Term sensitivity chart — loan size across 10–30 year terms at current rate
+  const terms = Array.from({length: 25}, (_, i) => i + 6); // 6 to 30 years
+  const loanByTerm = terms.map(t => Math.round(loanFromRepayment(monthlyRepay, rm, t * 12) + offset));
+  const interestByTerm = terms.map(t => Math.round(totalInterest(loanFromRepayment(monthlyRepay, rm, t * 12), monthlyRepay, t * 12)));
+
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('myChart'), {
+    type: 'line',
+    data: {
+      labels: terms.map(t => t + ' yr'),
+      datasets: [
+        { label: 'Max Loan', data: loanByTerm, borderColor: '#58a6ff', borderWidth: 2.5, pointRadius: 0, tension: 0.3, yAxisID: 'y' },
+        { label: 'Total Interest', data: interestByTerm, borderColor: '#f78166', borderWidth: 1.5, borderDash: [4,3], pointRadius: 0, tension: 0.3, yAxisID: 'y' },
+      ]
+    },
+    options: {
+      responsive: true, animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#7d8590', font: { family: 'DM Sans', size: 12 }, boxWidth: 20, padding: 14 } },
+        tooltip: {
+          backgroundColor: '#0d1117', borderColor: '#21262d', borderWidth: 1,
+          titleColor: '#7d8590', bodyColor: '#e6edf3',
+          titleFont: { family: 'DM Mono', size: 11 }, bodyFont: { family: 'DM Mono', size: 12 },
+          callbacks: { label: c => ' ' + c.dataset.label + ': $' + c.parsed.y.toLocaleString() }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 } }, grid: { color: '#21262d' },
+             title: { display: true, text: 'Loan term', color: '#7d8590', font: { size: 11 } } },
+        y: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 }, callback: v => '$' + (v >= 1e6 ? (v/1e6).toFixed(2) + 'M' : (v/1000).toFixed(0) + 'k') }, grid: { color: '#21262d' } }
+      }
+    }
+  });
+}
+
+IDS.forEach(id => document.getElementById(id).addEventListener('input', () => { save(); render(); }));
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (!confirm('Reset to defaults?')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  applyState(DEFAULTS); render();
+});
+
+applyState(load() || DEFAULTS);
+render();
+</script>
+</body>
+</html>
