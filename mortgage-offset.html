@@ -426,6 +426,15 @@ function render() {
   // ── stat cards ──
   const effNow = Math.max(loan - offset, 0);
   const interestNow = Math.round(effNow * (rate / 100 / 12));
+
+  // Total interest with offset (scenario 0) vs no offset baseline
+  const baseData = generateData(loan, 0, rate, weeklyRepay, 0, []);
+  const withOffsetData = allData[0];
+  const totalInterestBase   = baseData.reduce((s, d) => s + d.interest, 0);
+  const totalInterestOffset = withOffsetData.reduce((s, d) => s + d.interest, 0);
+  const interestSaved = Math.max(0, totalInterestBase - totalInterestOffset);
+  const monthsSaved = baseData.length - withOffsetData.length;
+
   let statsHtml = `<div class="stat-card">
     <div class="stat-label">Effective balance today</div>
     <div class="stat-value" style="color:#e6edf3">${fmtK(effNow)}</div>
@@ -434,6 +443,11 @@ function render() {
     <div class="stat-label">Monthly interest today</div>
     <div class="stat-value" style="color:var(--red)">$${interestNow.toLocaleString()}</div>
     <div class="stat-sub">$${(interestNow*12).toLocaleString()} p.a.</div>
+  </div>
+  <div class="stat-card" style="border-top-color:var(--green)">
+    <div class="stat-label">Interest saved (offset)</div>
+    <div class="stat-value" style="color:var(--green)">$${interestSaved.toLocaleString()}</div>
+    <div class="stat-sub">${monthsSaved > 0 ? monthsSaved + ' months off loan term' : 'vs. no offset account'}</div>
   </div>`;
 
   if (windfalls.length > 0) {
