@@ -427,13 +427,19 @@ function render() {
   const effNow = Math.max(loan - offset, 0);
   const interestNow = Math.round(effNow * (rate / 100 / 12));
 
-  // Total interest with offset (scenario 0) vs no offset baseline
+  // Baseline: no offset, no scenarios (raw loan repayment only)
   const baseData = generateData(loan, 0, rate, weeklyRepay, 0, []);
-  const withOffsetData = allData[0];
-  const totalInterestBase   = baseData.reduce((s, d) => s + d.interest, 0);
-  const totalInterestOffset = withOffsetData.reduce((s, d) => s + d.interest, 0);
-  const interestSaved = Math.max(0, totalInterestBase - totalInterestOffset);
-  const monthsSaved = baseData.length - withOffsetData.length;
+  const totalInterestBase = baseData.reduce((s, d) => s + d.interest, 0);
+
+  // Interest saved this month just from having an offset (no scenarios)
+  const interestWithoutOffset = Math.round(loan * (rate / 100 / 12));
+  const interestSavedNow = Math.max(0, interestWithoutOffset - interestNow);
+
+  // Per-scenario totals
+  const scenarioStats = allData.map(d => ({
+    totalInterest: d.reduce((s, p) => s + p.interest, 0),
+    monthsSaved: baseData.length - d.length,
+  }));
 
   let statsHtml = `<div class="stat-card">
     <div class="stat-label">Effective balance today</div>
@@ -445,9 +451,9 @@ function render() {
     <div class="stat-sub">$${(interestNow*12).toLocaleString()} p.a.</div>
   </div>
   <div class="stat-card" style="border-top-color:var(--green)">
-    <div class="stat-label">Interest saved (offset)</div>
-    <div class="stat-value" style="color:var(--green)">$${interestSaved.toLocaleString()}</div>
-    <div class="stat-sub">${monthsSaved > 0 ? monthsSaved + ' months off loan term' : 'vs. no offset account'}</div>
+    <div class="stat-label">Interest saved this month</div>
+    <div class="stat-value" style="color:var(--green)">$${interestSavedNow.toLocaleString()}</div>
+    <div class="stat-sub">$${(interestSavedNow*12).toLocaleString()} p.a. vs. no offset</div>
   </div>`;
 
   if (windfalls.length > 0) {
@@ -464,13 +470,18 @@ function render() {
     const d = allData[idx];
     const ez = d.find(p => p.effective === 0);
     const lz = d.find(p => p.loan === 0);
+    const ss = scenarioStats[idx];
+    const saved = Math.max(0, totalInterestBase - ss.totalInterest);
     statsHtml += `<div class="stat-card" style="border-top-color:${color}">
       <div class="stat-label" style="color:${color}">${s.label || 'Scenario ' + (idx+1)}</div>
       <div class="stat-value" style="color:${color};font-size:11px;margin-bottom:4px">
         Eff.$0: ${ez ? 'Mo.' + ez.month + ' &middot; ' + monthLabel(ez.month) : '&mdash;'}
       </div>
-      <div class="stat-value" style="font-size:11px;color:var(--muted)">
+      <div class="stat-value" style="font-size:11px;color:var(--muted);margin-bottom:2px">
         Loan $0: ${lz ? 'Mo.' + lz.month + ' &middot; ' + monthLabel(lz.month) : '&mdash;'}
+      </div>
+      <div class="stat-value" style="font-size:11px;color:var(--green)">
+        Saves $${saved.toLocaleString()} &middot; ${ss.monthsSaved > 0 ? ss.monthsSaved + ' mo. early' : 'same term'}
       </div>
     </div>`;
   });
