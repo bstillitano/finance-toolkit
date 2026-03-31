@@ -445,8 +445,13 @@ function render() {
     <div class="stat-label">Effective balance today</div>
     <div class="stat-value" style="color:#e6edf3">${fmtK(effNow)}</div>
   </div>
+  <div class="stat-card" style="border-top-color:var(--subtle)">
+    <div class="stat-label">Monthly interest (no offset)</div>
+    <div class="stat-value" style="color:var(--muted)">$${interestWithoutOffset.toLocaleString()}</div>
+    <div class="stat-sub">$${(interestWithoutOffset*12).toLocaleString()} p.a.</div>
+  </div>
   <div class="stat-card" style="border-top-color:var(--red)">
-    <div class="stat-label">Monthly interest today</div>
+    <div class="stat-label">Monthly interest (with offset)</div>
     <div class="stat-value" style="color:var(--red)">$${interestNow.toLocaleString()}</div>
     <div class="stat-sub">$${(interestNow*12).toLocaleString()} p.a.</div>
   </div>
