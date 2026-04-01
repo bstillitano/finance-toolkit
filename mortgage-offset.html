@@ -221,7 +221,7 @@ const DEFAULTS = {
   startMonth: 3,
   startYear: 2026,
   windfalls: [
-    { id: 1, label: 'Bonus / gift', amount: 20000, month: 3 },
+    { id: 1, label: 'Bonus / gift', amount: 20000, wfMonth: 4, wfYear: 2026 },
   ],
   scenarios: [
     { id: 1, label: 'Conservative', amount: 2000,  visible: true },
@@ -268,7 +268,7 @@ function applyState(state) {
   document.getElementById('weeklyRepay').value = state.weeklyRepay;
   if (state.startMonth) document.getElementById('startMonth').value = state.startMonth;
   if (state.startYear)  document.getElementById('startYear').value  = state.startYear;
-  windfalls = state.windfalls;
+  windfalls = migrateWindfalls(state.windfalls, state.startMonth || 3, state.startYear || 2026);
   scenarios = state.scenarios;
   nextWId   = state.nextWId   ?? (Math.max(0, ...windfalls.map(w => w.id))  + 1);
   nextSId   = state.nextSId   ?? (Math.max(0, ...scenarios.map(s => s.id))  + 1);
@@ -321,12 +321,46 @@ function generateData(loan, offsetStart, rateAnnual, repayWeekly, monthlyAdd, wf
 }
 
 // ─── render windfall list ─────────────────────────────────────────────────────
+
+// ─── windfall date helpers ────────────────────────────────────────────────────
+
+// ─── migrate old windfall format ─────────────────────────────────────────────
+function migrateWindfalls(wfs, startMonth, startYear) {
+  return wfs.map(w => {
+    if (w.wfMonth && w.wfYear) return w;
+    // Convert old offset-month integer to calendar month/year
+    const totalMonth = startMonth - 1 + (w.month || 0);
+    return { ...w, wfMonth: (totalMonth % 12) + 1, wfYear: startYear + Math.floor(totalMonth / 12) };
+  });
+}
+function wfToOffsetMonth(wf) {
+  const sm = parseInt(document.getElementById('startMonth')?.value) || 3;
+  const sy = parseInt(document.getElementById('startYear')?.value)  || 2026;
+  return (wf.wfYear - sy) * 12 + (wf.wfMonth - sm);
+}
+
+function monthOptions(selected) {
+  const names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return names.map((n, i) => `<option value="${i+1}"${selected===i+1?' selected':''}>${n}</option>`).join('');
+}
+
+function yearOptions(selected) {
+  const sy = parseInt(document.getElementById('startYear')?.value) || 2026;
+  let opts = '';
+  for (let y = sy; y <= sy + 30; y++) {
+    opts += `<option value="${y}"${selected===y?' selected':''}>${y}</option>`;
+  }
+  return opts;
+}
 function renderWindfallList() {
   const list = document.getElementById('windfallList');
+  // Sort by computed offset month before rendering
+  windfalls.sort((a, b) => wfToOffsetMonth(a) - wfToOffsetMonth(b));
   if (windfalls.length === 0) {
     list.innerHTML = '<p style="font-size:12px;color:var(--muted);padding:8px 0 4px">No windfalls added.</p>';
     return;
   }
+  const selectStyle = 'background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;width:100%;padding:8px 10px;outline:none;cursor:pointer;-webkit-appearance:none;appearance:none';
   list.innerHTML = windfalls.map((w, idx) => `
     <div class="list-row" style="border-left-color:var(--gold)" data-widx="${idx}">
       <div class="row-icon">&#9889;</div>
@@ -340,20 +374,33 @@ function renderWindfallList() {
           <input type="number" class="wf-amount" value="${w.amount}" step="5000" min="0">
         </div>
       </div>
-      <div class="field-wrap field-month">
-        <label>At Month #</label>
-        <div class="input-wrap"><span class="pfx">#</span>
-          <input type="number" class="wf-month" value="${w.month}" step="1" min="0">
-        </div>
+      <div class="field-wrap" style="flex:0 0 130px">
+        <label>Month</label>
+        <select class="wf-month-sel" style="${selectStyle}">${monthOptions(w.wfMonth)}</select>
+      </div>
+      <div class="field-wrap" style="flex:0 0 100px">
+        <label>Year</label>
+        <select class="wf-year-sel" style="${selectStyle}">${yearOptions(w.wfYear)}</select>
       </div>
       <button class="remove-btn" title="Remove windfall">&times;</button>
     </div>
   `).join('');
 
   list.querySelectorAll('.list-row').forEach((row, idx) => {
-    row.querySelector('.wf-label').addEventListener('input',  e => { windfalls[idx].label  = e.target.value;     saveState(); render(); });
-    row.querySelector('.wf-amount').addEventListener('input', e => { windfalls[idx].amount = +e.target.value||0; saveState(); render(); });
-    row.querySelector('.wf-month').addEventListener('input',  e => { windfalls[idx].month  = +e.target.value||0; saveState(); render(); });
+    row.querySelector('.wf-label').addEventListener('input', e => {
+      windfalls[idx].label = e.target.value; saveState(); render();
+    });
+    row.querySelector('.wf-amount').addEventListener('input', e => {
+      windfalls[idx].amount = +e.target.value || 0; saveState(); render();
+    });
+    row.querySelector('.wf-month-sel').addEventListener('change', e => {
+      windfalls[idx].wfMonth = +e.target.value;
+      saveState(); renderWindfallList(); render();
+    });
+    row.querySelector('.wf-year-sel').addEventListener('change', e => {
+      windfalls[idx].wfYear = +e.target.value;
+      saveState(); renderWindfallList(); render();
+    });
     row.querySelector('.remove-btn').addEventListener('click', () => {
       windfalls.splice(idx, 1); saveState(); renderWindfallList(); render();
     });
@@ -411,14 +458,15 @@ let chart = null;
 // ─── main render ──────────────────────────────────────────────────────────────
 function render() {
   const { loan, offset, rate, weeklyRepay } = getInputs();
-  const allData = scenarios.map(s => generateData(loan, offset, rate, weeklyRepay, s.amount, windfalls));
+  const resolvedWindfalls = windfalls.map(w => ({ ...w, month: wfToOffsetMonth(w) }));
+  const allData = scenarios.map(s => generateData(loan, offset, rate, weeklyRepay, s.amount, resolvedWindfalls));
 
   let maxMonth = 60;
   allData.forEach(d => { const lz = d.find(p => p.loan === 0); if (lz) maxMonth = Math.max(maxMonth, lz.month); });
 
-  const wfMonths = new Set(windfalls.filter(w => w.amount > 0).map(w => w.month));
+  const wfMonths = new Set(resolvedWindfalls.filter(w => w.amount > 0).map(w => w.month));
   const base = [0, 6, 12, 18, 24, 36, 48, 60, 84, 120, 180, 240];
-  const wfMilestones = windfalls.filter(w => w.amount > 0).map(w => w.month);
+  const wfMilestones = resolvedWindfalls.filter(w => w.amount > 0).map(w => w.month);
   const tail = maxMonth > 0 ? [maxMonth - 2, maxMonth - 1, maxMonth] : [];
   const milestones = [...new Set([...base, ...wfMilestones, ...tail])]
     .filter(m => m >= 0 && m <= maxMonth + 1).sort((a,b) => a-b);
@@ -462,7 +510,7 @@ function render() {
   </div>`;
 
   if (windfalls.length > 0) {
-    const totalWf = windfalls.reduce((s, w) => s + (w.amount || 0), 0);
+    const totalWf = resolvedWindfalls.reduce((s, w) => s + (w.amount || 0), 0);
     statsHtml += `<div class="stat-card" style="border-top-color:var(--gold)">
       <div class="stat-label" style="color:var(--gold)">Total windfalls</div>
       <div class="stat-value" style="color:var(--gold)">${fmtK(totalWf)}</div>
@@ -523,7 +571,7 @@ function render() {
           callbacks: {
             title: ctx => {
               const m = ctx[0].parsed.x;
-              const wfsHere = windfalls.filter(w => w.amount > 0 && w.month === m);
+              const wfsHere = resolvedWindfalls.filter(w => w.amount > 0 && w.month === m);
               const base = monthLabel(m) + ' (Mo.' + m + ')';
               if (wfsHere.length) return base + '  \u26a1 ' + wfsHere.map(w => (w.label || 'Windfall') + ' +' + fmtK(w.amount)).join(', ');
               return base;
@@ -556,7 +604,7 @@ function render() {
     const dFirst = allData[0][m];
     if (!dFirst) return '';
     const isW = wfMonths.has(m), isDone = dFirst.loan === 0;
-    const wfsHere = windfalls.filter(w => w.amount > 0 && w.month === m);
+    const wfsHere = resolvedWindfalls.filter(w => w.amount > 0 && w.month === m);
     const wfBadge = wfsHere.length ? ' <span style="color:var(--gold);font-size:10px">&#9889; ' + wfsHere.map(w => fmtK(w.amount)).join('+') + '</span>' : '';
 
     let tds = `<td style="color:var(--muted)">${m}${wfsHere.length ? ' &#9889;' : ''}</td>` +
@@ -581,8 +629,17 @@ document.querySelectorAll('#app > .panel input[id]').forEach(el => {
 });
 
 document.getElementById('addWindfallBtn').addEventListener('click', () => {
-  const lastMonth = windfalls.length ? windfalls[windfalls.length-1].month + 12 : 6;
-  windfalls.push({ id: nextWId++, label: 'Windfall ' + (windfalls.length + 1), amount: 10000, month: lastMonth });
+  const sm = parseInt(document.getElementById('startMonth')?.value) || 3;
+  const sy = parseInt(document.getElementById('startYear')?.value)  || 2026;
+  // Default to 12 months after the last windfall, or 6 months after start
+  let newMonth = sm + 6, newYear = sy;
+  if (windfalls.length) {
+    const last = windfalls[windfalls.length - 1];
+    newMonth = last.wfMonth + 12;
+    newYear  = last.wfYear;
+    if (newMonth > 12) { newMonth -= 12; newYear += 1; }
+  }
+  windfalls.push({ id: nextWId++, label: 'Windfall ' + (windfalls.length + 1), amount: 10000, wfMonth: newMonth, wfYear: newYear });
   saveState(); renderWindfallList(); render();
 });
 
