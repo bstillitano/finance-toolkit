@@ -205,6 +205,7 @@
 </div>
 
 <script>
+<script>
 // ─── palette ──────────────────────────────────────────────────────────────────
 const PALETTE = [
   '#58a6ff', '#3fb950', '#e3b341', '#f78166', '#bc8cff',
@@ -214,76 +215,70 @@ function colorFor(idx) { return PALETTE[idx % PALETTE.length]; }
 
 // ─── defaults ─────────────────────────────────────────────────────────────────
 const DEFAULTS = {
-  loan: 750000,
-  offset: 80000,
-  rate: 6.00,
-  weeklyRepay: 900,
-  startMonth: 3,
-  startYear: 2026,
-  windfalls: [
-    { id: 1, label: 'Bonus / gift', amount: 20000, wfMonth: 4, wfYear: 2026 },
-  ],
+  loan: 750000, offset: 80000, rate: 6.00, weeklyRepay: 900,
+  startMonth: 3, startYear: 2026,
+  windfalls: [{ id: 1, label: 'Bonus / gift', amount: 20000, wfMonth: 4, wfYear: 2026 }],
   scenarios: [
-    { id: 1, label: 'Conservative', amount: 2000,  visible: true },
-    { id: 2, label: 'Aggressive',   amount: 5000,  visible: true },
+    { id: 1, label: 'Conservative', amount: 2000, visible: true },
+    { id: 2, label: 'Aggressive',   amount: 5000, visible: true },
   ],
 };
 
 // ─── state ────────────────────────────────────────────────────────────────────
-const STORAGE_KEY = 'mortgage-calc-v1';
-let windfalls, scenarios, nextWId, nextSId;
+const STORAGE_KEY = 'mortgage-calc-v2';
+let windfalls = [], scenarios = [], nextWId = 2, nextSId = 3;
 
-// ─── localStorage helpers ─────────────────────────────────────────────────────
-let _initialising = true;
+// ─── persistence ──────────────────────────────────────────────────────────────
 function saveState() {
-  if (_initialising) return;
-  const state = {
-    loan:        +document.getElementById('loanBal').value    || 0,
-    offset:      +document.getElementById('offsetBal').value  || 0,
-    rate:        +document.getElementById('rate').value       || 0,
-    weeklyRepay: +document.getElementById('weeklyRepay').value|| 0,
-    startMonth:  +document.getElementById('startMonth').value  || 3,
-    startYear:   +document.getElementById('startYear').value   || 2026,
-    windfalls,
-    scenarios,
-    nextWId,
-    nextSId,
-  };
   try {
+    const state = {
+      loan:        +document.getElementById('loanBal').value     || 0,
+      offset:      +document.getElementById('offsetBal').value   || 0,
+      rate:        +document.getElementById('rate').value        || 0,
+      weeklyRepay: +document.getElementById('weeklyRepay').value || 0,
+      startMonth:  +document.getElementById('startMonth').value  || 3,
+      startYear:   +document.getElementById('startYear').value   || 2026,
+      windfalls, scenarios, nextWId, nextSId,
+    };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     flashSaved();
-  } catch (e) { /* storage full or unavailable */ }
+  } catch (e) { console.warn('saveState failed:', e); }
 }
 
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (e) { /* corrupt data */ }
-  return null;
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    // Validate minimal shape
+    if (typeof s !== 'object' || !Array.isArray(s.windfalls) || !Array.isArray(s.scenarios)) return null;
+    return s;
+  } catch (e) { return null; }
 }
 
 function applyState(state) {
-  try {
-    if (state.loan       !== undefined) document.getElementById('loanBal').value     = state.loan;
-    if (state.offset     !== undefined) document.getElementById('offsetBal').value   = state.offset;
-    if (state.rate       !== undefined) document.getElementById('rate').value        = state.rate;
-    if (state.weeklyRepay!== undefined) document.getElementById('weeklyRepay').value = state.weeklyRepay;
-    if (state.startMonth)               document.getElementById('startMonth').value  = state.startMonth;
-    if (state.startYear)                document.getElementById('startYear').value   = state.startYear;
-    windfalls = migrateWindfalls(state.windfalls, state.startMonth || 3, state.startYear || 2026);
-    scenarios = Array.isArray(state.scenarios) ? state.scenarios : JSON.parse(JSON.stringify(DEFAULTS.scenarios));
-    nextWId   = state.nextWId ?? (windfalls.length ? Math.max(...windfalls.map(w => w.id)) + 1 : 1);
-    nextSId   = state.nextSId ?? (scenarios.length ? Math.max(...scenarios.map(s => s.id)) + 1 : 1);
-  } catch(e) {
-    console.warn('applyState failed, falling back to defaults:', e);
-    applyState(JSON.parse(JSON.stringify(DEFAULTS)));
-  }
+  document.getElementById('loanBal').value     = state.loan        ?? 750000;
+  document.getElementById('offsetBal').value   = state.offset      ?? 80000;
+  document.getElementById('rate').value        = state.rate        ?? 6.00;
+  document.getElementById('weeklyRepay').value = state.weeklyRepay ?? 900;
+  document.getElementById('startMonth').value  = state.startMonth  ?? 3;
+  document.getElementById('startYear').value   = state.startYear   ?? 2026;
+  windfalls = state.windfalls.map(w => ({
+    ...w,
+    // migrate old integer month format to wfMonth/wfYear
+    wfMonth: w.wfMonth ?? (((state.startMonth - 1 + (w.month || 0)) % 12) + 1),
+    wfYear:  w.wfYear  ?? (state.startYear + Math.floor((state.startMonth - 1 + (w.month || 0)) / 12)),
+  }));
+  scenarios = state.scenarios;
+  nextWId = state.nextWId ?? (windfalls.length ? Math.max(...windfalls.map(w => w.id)) + 1 : 2);
+  nextSId = state.nextSId ?? (scenarios.length ? Math.max(...scenarios.map(s => s.id)) + 1 : 3);
 }
 
+// ─── save indicator ───────────────────────────────────────────────────────────
 let saveFlashTimer = null;
 function flashSaved() {
   const el = document.getElementById('saveIndicator');
+  if (!el) return;
   el.classList.add('show');
   clearTimeout(saveFlashTimer);
   saveFlashTimer = setTimeout(() => el.classList.remove('show'), 1800);
@@ -292,22 +287,48 @@ function flashSaved() {
 // ─── helpers ──────────────────────────────────────────────────────────────────
 function fmtK(v) { return '$' + (v / 1000).toFixed(1) + 'k'; }
 
+function getStartDate() {
+  return {
+    sm: parseInt(document.getElementById('startMonth').value) || 3,
+    sy: parseInt(document.getElementById('startYear').value)  || 2026,
+  };
+}
+
 function monthLabel(m) {
-  const sm = (parseInt(document.getElementById('startMonth')?.value) || 3) - 1;
-  const sy = parseInt(document.getElementById('startYear')?.value) || 2026;
-  const d = new Date(sy, sm + m, 1);
+  const { sm, sy } = getStartDate();
+  const d = new Date(sy, sm - 1 + m, 1);
   return d.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
+}
+
+function wfToOffsetMonth(wf) {
+  const { sm, sy } = getStartDate();
+  return (wf.wfYear - sy) * 12 + (wf.wfMonth - sm);
+}
+
+function monthOptions(selected) {
+  const names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return names.map((n, i) => `<option value="${i+1}"${selected === i+1 ? ' selected' : ''}>${n}</option>`).join('');
+}
+
+function yearOptions(selected) {
+  const { sy } = getStartDate();
+  let opts = '';
+  for (let y = sy; y <= sy + 30; y++) {
+    opts += `<option value="${y}"${selected === y ? ' selected' : ''}>${y}</option>`;
+  }
+  return opts;
 }
 
 function getInputs() {
   return {
-    loan:        +document.getElementById('loanBal').value    || 0,
-    offset:      +document.getElementById('offsetBal').value  || 0,
-    rate:        +document.getElementById('rate').value       || 0,
-    weeklyRepay: +document.getElementById('weeklyRepay').value|| 0,
+    loan:        +document.getElementById('loanBal').value     || 0,
+    offset:      +document.getElementById('offsetBal').value   || 0,
+    rate:        +document.getElementById('rate').value        || 0,
+    weeklyRepay: +document.getElementById('weeklyRepay').value || 0,
   };
 }
 
+// ─── simulation ───────────────────────────────────────────────────────────────
 function generateData(loan, offsetStart, rateAnnual, repayWeekly, monthlyAdd, wfList) {
   const data = [];
   let lb = loan, off = offsetStart;
@@ -328,51 +349,17 @@ function generateData(loan, offsetStart, rateAnnual, repayWeekly, monthlyAdd, wf
 }
 
 // ─── render windfall list ─────────────────────────────────────────────────────
+const SEL_STYLE = "background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;width:100%;padding:8px 10px;outline:none;cursor:pointer;-webkit-appearance:none;appearance:none";
 
-// ─── windfall date helpers ────────────────────────────────────────────────────
-
-// ─── migrate old windfall format ─────────────────────────────────────────────
-function migrateWindfalls(wfs, startMonth, startYear) {
-  if (!Array.isArray(wfs)) return [];
-  return wfs.map(w => {
-    if (w && w.wfMonth && w.wfYear) return w;
-    // Convert old offset-month integer to calendar month/year
-    const totalMonth = (startMonth - 1) + (w.month || 0);
-    const yr = startYear + Math.floor(totalMonth / 12);
-    const mo = (totalMonth % 12) + 1;
-    return { ...w, wfMonth: mo, wfYear: yr };
-  });
-}
-function wfToOffsetMonth(wf) {
-  const sm = parseInt(document.getElementById('startMonth')?.value) || 3;
-  const sy = parseInt(document.getElementById('startYear')?.value)  || 2026;
-  return (wf.wfYear - sy) * 12 + (wf.wfMonth - sm);
-}
-
-function monthOptions(selected) {
-  const names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  return names.map((n, i) => `<option value="${i+1}"${selected===i+1?' selected':''}>${n}</option>`).join('');
-}
-
-function yearOptions(selected) {
-  const sy = parseInt(document.getElementById('startYear')?.value) || 2026;
-  let opts = '';
-  for (let y = sy; y <= sy + 30; y++) {
-    opts += `<option value="${y}"${selected===y?' selected':''}>${y}</option>`;
-  }
-  return opts;
-}
 function renderWindfallList() {
-  const list = document.getElementById('windfallList');
-  // Sort by computed offset month before rendering
   windfalls.sort((a, b) => wfToOffsetMonth(a) - wfToOffsetMonth(b));
+  const list = document.getElementById('windfallList');
   if (windfalls.length === 0) {
     list.innerHTML = '<p style="font-size:12px;color:var(--muted);padding:8px 0 4px">No windfalls added.</p>';
     return;
   }
-  const selectStyle = 'background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;width:100%;padding:8px 10px;outline:none;cursor:pointer;-webkit-appearance:none;appearance:none';
   list.innerHTML = windfalls.map((w, idx) => `
-    <div class="list-row" style="border-left-color:var(--gold)" data-widx="${idx}">
+    <div class="list-row" style="border-left-color:var(--gold)">
       <div class="row-icon">&#9889;</div>
       <div class="field-wrap field-label">
         <label>Label</label>
@@ -386,34 +373,22 @@ function renderWindfallList() {
       </div>
       <div class="field-wrap" style="flex:0 0 130px">
         <label>Month</label>
-        <select class="wf-month-sel" style="${selectStyle}">${monthOptions(w.wfMonth)}</select>
+        <select class="wf-month-sel" style="${SEL_STYLE}">${monthOptions(w.wfMonth)}</select>
       </div>
       <div class="field-wrap" style="flex:0 0 100px">
         <label>Year</label>
-        <select class="wf-year-sel" style="${selectStyle}">${yearOptions(w.wfYear)}</select>
+        <select class="wf-year-sel" style="${SEL_STYLE}">${yearOptions(w.wfYear)}</select>
       </div>
       <button class="remove-btn" title="Remove windfall">&times;</button>
     </div>
   `).join('');
 
   list.querySelectorAll('.list-row').forEach((row, idx) => {
-    row.querySelector('.wf-label').addEventListener('input', e => {
-      windfalls[idx].label = e.target.value; saveState(); render();
-    });
-    row.querySelector('.wf-amount').addEventListener('input', e => {
-      windfalls[idx].amount = +e.target.value || 0; saveState(); render();
-    });
-    row.querySelector('.wf-month-sel').addEventListener('change', e => {
-      windfalls[idx].wfMonth = +e.target.value;
-      saveState(); renderWindfallList(); render();
-    });
-    row.querySelector('.wf-year-sel').addEventListener('change', e => {
-      windfalls[idx].wfYear = +e.target.value;
-      saveState(); renderWindfallList(); render();
-    });
-    row.querySelector('.remove-btn').addEventListener('click', () => {
-      windfalls.splice(idx, 1); saveState(); renderWindfallList(); render();
-    });
+    row.querySelector('.wf-label').addEventListener('input', e => { windfalls[idx].label = e.target.value; saveState(); render(); });
+    row.querySelector('.wf-amount').addEventListener('input', e => { windfalls[idx].amount = +e.target.value || 0; saveState(); render(); });
+    row.querySelector('.wf-month-sel').addEventListener('change', e => { windfalls[idx].wfMonth = +e.target.value; saveState(); renderWindfallList(); render(); });
+    row.querySelector('.wf-year-sel').addEventListener('change', e => { windfalls[idx].wfYear = +e.target.value; saveState(); renderWindfallList(); render(); });
+    row.querySelector('.remove-btn').addEventListener('click', () => { windfalls.splice(idx, 1); saveState(); renderWindfallList(); render(); });
   });
 }
 
@@ -423,7 +398,7 @@ function renderScenarioList() {
   list.innerHTML = scenarios.map((s, idx) => {
     const color = colorFor(idx);
     return `
-      <div class="list-row" style="border-left-color:${color}" data-sidx="${idx}">
+      <div class="list-row" style="border-left-color:${color}">
         <div class="row-icon" style="color:${color}">&#9632;</div>
         <div class="field-wrap field-label">
           <label>Label</label>
@@ -445,8 +420,8 @@ function renderScenarioList() {
   }).join('');
 
   list.querySelectorAll('.list-row').forEach((row, idx) => {
-    row.querySelector('.sc-label').addEventListener('input',  e => { scenarios[idx].label  = e.target.value;     saveState(); render(); });
-    row.querySelector('.sc-amount').addEventListener('input', e => { scenarios[idx].amount = +e.target.value||0; saveState(); render(); });
+    row.querySelector('.sc-label').addEventListener('input', e => { scenarios[idx].label = e.target.value; saveState(); render(); });
+    row.querySelector('.sc-amount').addEventListener('input', e => { scenarios[idx].amount = +e.target.value || 0; saveState(); render(); });
     const visCheck = row.querySelector('.sc-vis');
     if (visCheck) {
       visCheck.addEventListener('change', e => {
@@ -456,13 +431,11 @@ function renderScenarioList() {
       });
     }
     const rmBtn = row.querySelector('.remove-btn');
-    if (rmBtn) rmBtn.addEventListener('click', () => {
-      scenarios.splice(idx, 1); saveState(); renderScenarioList(); render();
-    });
+    if (rmBtn) rmBtn.addEventListener('click', () => { scenarios.splice(idx, 1); saveState(); renderScenarioList(); render(); });
   });
 }
 
-// ─── chart instance ───────────────────────────────────────────────────────────
+// ─── chart ────────────────────────────────────────────────────────────────────
 let chart = null;
 
 // ─── main render ──────────────────────────────────────────────────────────────
@@ -474,69 +447,66 @@ function render() {
   let maxMonth = 60;
   allData.forEach(d => { const lz = d.find(p => p.loan === 0); if (lz) maxMonth = Math.max(maxMonth, lz.month); });
 
-  const wfMonths = new Set(resolvedWindfalls.filter(w => w.amount > 0).map(w => w.month));
-  const base = [0, 6, 12, 18, 24, 36, 48, 60, 84, 120, 180, 240];
+  const wfMonths    = new Set(resolvedWindfalls.filter(w => w.amount > 0).map(w => w.month));
   const wfMilestones = resolvedWindfalls.filter(w => w.amount > 0).map(w => w.month);
-  const tail = maxMonth > 0 ? [maxMonth - 2, maxMonth - 1, maxMonth] : [];
-  const milestones = [...new Set([...base, ...wfMilestones, ...tail])]
-    .filter(m => m >= 0 && m <= maxMonth + 1).sort((a,b) => a-b);
+  const base        = [0, 6, 12, 18, 24, 36, 48, 60, 84, 120, 180, 240];
+  const tail        = maxMonth > 0 ? [maxMonth - 2, maxMonth - 1, maxMonth] : [];
+  const milestones  = [...new Set([...base, ...wfMilestones, ...tail])].filter(m => m >= 0 && m <= maxMonth + 1).sort((a, b) => a - b);
 
-  // ── stat cards ──
-  const effNow = Math.max(loan - offset, 0);
-  const interestNow = Math.round(effNow * (rate / 100 / 12));
-
-  // Baseline: no offset, no scenarios (raw loan repayment only)
-  const baseData = generateData(loan, 0, rate, weeklyRepay, 0, []);
-  const totalInterestBase = baseData.reduce((s, d) => s + d.interest, 0);
-
-  // Interest saved this month just from having an offset (no scenarios)
+  // ── stat cards ──────────────────────────────────────────────────────────────
+  const effNow             = Math.max(loan - offset, 0);
+  const interestNow        = Math.round(effNow * (rate / 100 / 12));
   const interestWithoutOffset = Math.round(loan * (rate / 100 / 12));
-  const interestSavedNow = Math.max(0, interestWithoutOffset - interestNow);
+  const interestSavedNow   = Math.max(0, interestWithoutOffset - interestNow);
 
-  // Per-scenario totals
-  const scenarioStats = allData.map(d => ({
+  const baseData          = generateData(loan, 0, rate, weeklyRepay, 0, []);
+  const totalInterestBase = baseData.reduce((s, d) => s + d.interest, 0);
+  const scenarioStats     = allData.map(d => ({
     totalInterest: d.reduce((s, p) => s + p.interest, 0),
     monthsSaved: baseData.length - d.length,
   }));
 
-  let statsHtml = `<div class="stat-card">
-    <div class="stat-label">Effective balance today</div>
-    <div class="stat-value" style="color:#e6edf3">${fmtK(effNow)}</div>
-  </div>
-  <div class="stat-card" style="border-top-color:var(--subtle)">
-    <div class="stat-label">Monthly interest (no offset)</div>
-    <div class="stat-value" style="color:var(--muted)">$${interestWithoutOffset.toLocaleString()}</div>
-    <div class="stat-sub">$${(interestWithoutOffset*12).toLocaleString()} p.a.</div>
-  </div>
-  <div class="stat-card" style="border-top-color:var(--red)">
-    <div class="stat-label">Monthly interest (with offset)</div>
-    <div class="stat-value" style="color:var(--red)">$${interestNow.toLocaleString()}</div>
-    <div class="stat-sub">$${(interestNow*12).toLocaleString()} p.a.</div>
-  </div>
-  <div class="stat-card" style="border-top-color:var(--green)">
-    <div class="stat-label">Interest saved this month</div>
-    <div class="stat-value" style="color:var(--green)">$${interestSavedNow.toLocaleString()}</div>
-    <div class="stat-sub">$${(interestSavedNow*12).toLocaleString()} p.a. vs. no offset</div>
-  </div>`;
+  let statsHtml = `
+    <div class="stat-card">
+      <div class="stat-label">Effective balance today</div>
+      <div class="stat-value" style="color:#e6edf3">${fmtK(effNow)}</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--subtle)">
+      <div class="stat-label">Monthly interest (no offset)</div>
+      <div class="stat-value" style="color:var(--muted)">$${interestWithoutOffset.toLocaleString()}</div>
+      <div class="stat-sub">$${(interestWithoutOffset * 12).toLocaleString()} p.a.</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--red)">
+      <div class="stat-label">Monthly interest (with offset)</div>
+      <div class="stat-value" style="color:var(--red)">$${interestNow.toLocaleString()}</div>
+      <div class="stat-sub">$${(interestNow * 12).toLocaleString()} p.a.</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--green)">
+      <div class="stat-label">Interest saved this month</div>
+      <div class="stat-value" style="color:var(--green)">$${interestSavedNow.toLocaleString()}</div>
+      <div class="stat-sub">$${(interestSavedNow * 12).toLocaleString()} p.a. vs. no offset</div>
+    </div>`;
 
   if (windfalls.length > 0) {
-    const totalWf = resolvedWindfalls.reduce((s, w) => s + (w.amount || 0), 0);
-    statsHtml += `<div class="stat-card" style="border-top-color:var(--gold)">
+    const totalWf = windfalls.reduce((s, w) => s + (w.amount || 0), 0);
+    statsHtml += `
+    <div class="stat-card" style="border-top-color:var(--gold)">
       <div class="stat-label" style="color:var(--gold)">Total windfalls</div>
       <div class="stat-value" style="color:var(--gold)">${fmtK(totalWf)}</div>
-      <div class="stat-value" style="font-size:11px;color:var(--muted);margin-top:4px">${windfalls.length} lump sum${windfalls.length > 1 ? 's' : ''}</div>
+      <div class="stat-sub">${windfalls.length} lump sum${windfalls.length > 1 ? 's' : ''}</div>
     </div>`;
   }
 
   scenarios.forEach((s, idx) => {
     const color = colorFor(idx);
-    const d = allData[idx];
-    const ez = d.find(p => p.effective === 0);
-    const lz = d.find(p => p.loan === 0);
-    const ss = scenarioStats[idx];
+    const d     = allData[idx];
+    const ez    = d.find(p => p.effective === 0);
+    const lz    = d.find(p => p.loan === 0);
+    const ss    = scenarioStats[idx];
     const saved = Math.max(0, totalInterestBase - ss.totalInterest);
-    statsHtml += `<div class="stat-card" style="border-top-color:${color}">
-      <div class="stat-label" style="color:${color}">${s.label || 'Scenario ' + (idx+1)}</div>
+    statsHtml += `
+    <div class="stat-card" style="border-top-color:${color}">
+      <div class="stat-label" style="color:${color}">${s.label || 'Scenario ' + (idx + 1)}</div>
       <div class="stat-value" style="color:${color};font-size:11px;margin-bottom:4px">
         Eff.$0: ${ez ? 'Mo.' + ez.month + ' &middot; ' + monthLabel(ez.month) : '&mdash;'}
       </div>
@@ -548,25 +518,28 @@ function render() {
       </div>
     </div>`;
   });
+
   document.getElementById('statsRow').innerHTML = statsHtml;
 
-  // ── chart ──
+  // ── chart ───────────────────────────────────────────────────────────────────
   const labels = Array.from({ length: maxMonth + 1 }, (_, i) => i);
   const datasets = [{
     label: 'Loan Balance',
     data: labels.map(m => allData[0][m] ? allData[0][m].loan : null),
-    borderColor: '#f78166', borderWidth: 2, borderDash: [6,3], pointRadius: 0, tension: 0.3,
+    borderColor: '#f78166', borderWidth: 2, borderDash: [6, 3], pointRadius: 0, tension: 0.3,
   }];
+
   scenarios.forEach((s, idx) => {
     if (!s.visible) return;
     const color = colorFor(idx);
     const d = allData[idx];
-    const lbl = s.label || ('Scenario ' + (idx+1));
-    datasets.push({ label: lbl + ' – Offset',    data: labels.map(m => d[m] ? d[m].offset    : null), borderColor: color, borderWidth: 1,   borderDash: [3,3], pointRadius: 0, tension: 0.3 });
-    datasets.push({ label: lbl + ' – Effective', data: labels.map(m => d[m] ? d[m].effective : null), borderColor: color, borderWidth: 2.5,                    pointRadius: 0, tension: 0.3 });
+    const lbl = s.label || ('Scenario ' + (idx + 1));
+    datasets.push({ label: lbl + ' – Offset',    data: labels.map(m => d[m] ? d[m].offset    : null), borderColor: color, borderWidth: 1,   borderDash: [3, 3], pointRadius: 0, tension: 0.3 });
+    datasets.push({ label: lbl + ' – Effective', data: labels.map(m => d[m] ? d[m].effective : null), borderColor: color, borderWidth: 2.5,                     pointRadius: 0, tension: 0.3 });
   });
 
-  const config = {
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('myChart'), {
     type: 'line',
     data: { labels, datasets },
     options: {
@@ -583,8 +556,7 @@ function render() {
               const m = ctx[0].parsed.x;
               const wfsHere = resolvedWindfalls.filter(w => w.amount > 0 && w.month === m);
               const base = monthLabel(m) + ' (Mo.' + m + ')';
-              if (wfsHere.length) return base + '  \u26a1 ' + wfsHere.map(w => (w.label || 'Windfall') + ' +' + fmtK(w.amount)).join(', ');
-              return base;
+              return wfsHere.length ? base + '  \u26a1 ' + wfsHere.map(w => (w.label || 'Windfall') + ' +' + fmtK(w.amount)).join(', ') : base;
             },
             label: ctx => ' ' + ctx.dataset.label + ': $' + (ctx.parsed.y / 1000).toFixed(1) + 'k',
           }
@@ -592,19 +564,16 @@ function render() {
       },
       scales: {
         x: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 }, maxTicksLimit: 20 }, grid: { color: '#21262d' }, title: { display: true, text: 'Months from ' + monthLabel(0), color: '#7d8590', font: { size: 11 } } },
-        y: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 }, callback: v => '$' + (v/1000).toFixed(0) + 'k' }, grid: { color: '#21262d' } }
+        y: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 }, callback: v => '$' + (v / 1000).toFixed(0) + 'k' }, grid: { color: '#21262d' } }
       }
     }
-  };
+  });
 
-  if (chart) chart.destroy();
-  chart = new Chart(document.getElementById('myChart'), config);
-
-  // ── table ──
+  // ── table ───────────────────────────────────────────────────────────────────
   document.getElementById('tableHead').innerHTML =
     '<th>Mo.</th><th>Date</th><th>Loan</th>' +
     scenarios.map((s, idx) => {
-      const c = colorFor(idx), lbl = s.label || ('Scenario ' + (idx+1));
+      const c = colorFor(idx), lbl = s.label || ('Scenario ' + (idx + 1));
       return `<th style="color:${c}">${lbl}<br><span style="font-weight:400;color:var(--muted)">Offset</span></th>` +
              `<th style="color:${c}">${lbl}<br><span style="font-weight:400;color:var(--muted)">Effective</span></th>` +
              `<th style="color:${c}">${lbl}<br><span style="font-weight:400;color:var(--muted)">Interest/mo</span></th>`;
@@ -613,49 +582,58 @@ function render() {
   document.getElementById('tableBody').innerHTML = milestones.map(m => {
     const dFirst = allData[0][m];
     if (!dFirst) return '';
-    const isW = wfMonths.has(m), isDone = dFirst.loan === 0;
+    const isW    = wfMonths.has(m);
+    const isDone = dFirst.loan === 0;
     const wfsHere = resolvedWindfalls.filter(w => w.amount > 0 && w.month === m);
     const wfBadge = wfsHere.length ? ' <span style="color:var(--gold);font-size:10px">&#9889; ' + wfsHere.map(w => fmtK(w.amount)).join('+') + '</span>' : '';
 
     let tds = `<td style="color:var(--muted)">${m}${wfsHere.length ? ' &#9889;' : ''}</td>` +
               `<td style="color:var(--muted)">${monthLabel(m)}${wfBadge}</td>` +
-              `<td style="font-weight:${isDone?600:400}">${isDone ? '&#10003; $0' : fmtK(dFirst.loan)}</td>`;
+              `<td style="font-weight:${isDone ? 600 : 400}">${isDone ? '&#10003; $0' : fmtK(dFirst.loan)}</td>`;
 
     scenarios.forEach((s, idx) => {
       const d = allData[idx][m], color = colorFor(idx);
-      if (!d) { tds += '<td>&mdash;</td><td>&mdash;</td>'; return; }
+      if (!d) { tds += '<td>&mdash;</td><td>&mdash;</td><td>&mdash;</td>'; return; }
       const effDone = d.effective === 0;
       tds += `<td>${fmtK(d.offset)}</td>`;
-      tds += `<td style="color:${effDone ? color : 'var(--text)'};font-weight:${effDone?600:400}">${effDone ? '&#10003; $0' : fmtK(d.effective)}</td>`;
+      tds += `<td style="color:${effDone ? color : 'var(--text)'};font-weight:${effDone ? 600 : 400}">${effDone ? '&#10003; $0' : fmtK(d.effective)}</td>`;
       tds += `<td style="color:${d.interest === 0 ? color : 'var(--red)'}">${d.interest === 0 ? '&#10003; $0' : '$' + d.interest.toLocaleString()}</td>`;
     });
+
     return `<tr class="${isDone ? 'loan-done-row' : isW ? 'windfall-row' : ''}">${tds}</tr>`;
   }).join('');
 }
 
-// ─── wire up static loan inputs ───────────────────────────────────────────────
-document.querySelectorAll('#app > .panel input[id]').forEach(el => {
-  el.addEventListener('input', () => { saveState(); render(); });
+// ─── init ─────────────────────────────────────────────────────────────────────
+const saved = loadState();
+applyState(saved || JSON.parse(JSON.stringify(DEFAULTS)));
+renderWindfallList();
+renderScenarioList();
+render();
+
+// ─── event listeners (registered AFTER init so they never fire during load) ───
+document.querySelectorAll('#app > .panel input[id], #app > .panel select[id]').forEach(el => {
+  el.addEventListener('input',  () => { saveState(); render(); });
+  el.addEventListener('change', () => { saveState(); render(); });
 });
 
 document.getElementById('addWindfallBtn').addEventListener('click', () => {
-  const sm = parseInt(document.getElementById('startMonth')?.value) || 3;
-  const sy = parseInt(document.getElementById('startYear')?.value)  || 2026;
-  // Default to 12 months after the last windfall, or 6 months after start
-  let newMonth = sm + 6, newYear = sy;
+  const { sm, sy } = getStartDate();
+  let wfMonth = sm + 6, wfYear = sy;
+  if (wfMonth > 12) { wfMonth -= 12; wfYear += 1; }
   if (windfalls.length) {
     const last = windfalls[windfalls.length - 1];
-    newMonth = last.wfMonth + 12;
-    newYear  = last.wfYear;
-    if (newMonth > 12) { newMonth -= 12; newYear += 1; }
+    wfMonth = last.wfMonth + 12;
+    wfYear  = last.wfYear;
+    if (wfMonth > 12) { wfMonth -= 12; wfYear += 1; }
   }
-  windfalls.push({ id: nextWId++, label: 'Windfall ' + (windfalls.length + 1), amount: 10000, wfMonth: newMonth, wfYear: newYear });
+  windfalls.push({ id: nextWId++, label: 'Windfall ' + (windfalls.length + 1), amount: 10000, wfMonth, wfYear });
   saveState(); renderWindfallList(); render();
 });
 
 document.getElementById('addScenarioBtn').addEventListener('click', () => {
   const amounts = [1000, 2000, 3000, 5000, 7500, 10000, 15000, 20000];
-  const nextAmount = amounts[scenarios.length] ?? (scenarios[scenarios.length-1].amount + 5000);
+  const nextAmount = amounts[scenarios.length] ?? (scenarios[scenarios.length - 1].amount + 5000);
   scenarios.push({ id: nextSId++, label: 'Scenario ' + (scenarios.length + 1), amount: nextAmount, visible: true });
   saveState(); renderScenarioList(); render();
 });
@@ -666,17 +644,6 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   applyState(JSON.parse(JSON.stringify(DEFAULTS)));
   renderWindfallList(); renderScenarioList(); render();
 });
-
-// ─── init — load saved state or defaults ──────────────────────────────────────
-try {
-  const saved = loadState();
-  applyState(saved ? saved : JSON.parse(JSON.stringify(DEFAULTS)));
-  renderWindfallList();
-  renderScenarioList();
-  render();
-} finally {
-  _initialising = false;
-}
 </script>
 </body>
 </html>
