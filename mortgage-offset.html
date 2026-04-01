@@ -380,7 +380,7 @@ function renderWindfallList() {
       </div>
       <div class="vis-toggle">
         <input type="checkbox" id="wfvis-${w.id}" class="wf-vis" ${w.visible !== false ? 'checked' : ''}>
-        <label for="wfvis-${w.id}">${w.visible !== false ? 'Active' : 'Skipped'}</label>
+        <label for="wfvis-${w.id}">${w.visible !== false ? 'Visible' : 'Hidden'}</label>
       </div>
       <button class="remove-btn" title="Remove windfall">&times;</button>
     </div>
@@ -395,7 +395,7 @@ function renderWindfallList() {
     if (visCheck) {
       visCheck.addEventListener('change', e => {
         windfalls[idx].visible = e.target.checked;
-        e.target.nextElementSibling.textContent = e.target.checked ? 'Active' : 'Skipped';
+        e.target.nextElementSibling.textContent = e.target.checked ? 'Visible' : 'Hidden';
         saveState(); render();
       });
     }
