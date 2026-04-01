@@ -216,7 +216,7 @@ function colorFor(idx) { return PALETTE[idx % PALETTE.length]; }
 const DEFAULTS = {
   loan: 750000, offset: 80000, rate: 6.00, weeklyRepay: 900,
   startMonth: 3, startYear: 2026,
-  windfalls: [{ id: 1, label: 'Bonus / gift', amount: 20000, wfMonth: 4, wfYear: 2026 }],
+  windfalls: [{ id: 1, label: 'Bonus / gift', amount: 20000, wfMonth: 4, wfYear: 2026, visible: true }],
   scenarios: [
     { id: 1, label: 'Conservative', amount: 2000, visible: true },
     { id: 2, label: 'Aggressive',   amount: 5000, visible: true },
@@ -378,6 +378,10 @@ function renderWindfallList() {
         <label>Year</label>
         <select class="wf-year-sel" style="${SEL_STYLE}">${yearOptions(w.wfYear)}</select>
       </div>
+      <div class="vis-toggle">
+        <input type="checkbox" id="wfvis-${w.id}" class="wf-vis" ${w.visible !== false ? 'checked' : ''}>
+        <label for="wfvis-${w.id}">${w.visible !== false ? 'Active' : 'Skipped'}</label>
+      </div>
       <button class="remove-btn" title="Remove windfall">&times;</button>
     </div>
   `).join('');
@@ -387,6 +391,14 @@ function renderWindfallList() {
     row.querySelector('.wf-amount').addEventListener('input', e => { windfalls[idx].amount = +e.target.value || 0; saveState(); render(); });
     row.querySelector('.wf-month-sel').addEventListener('change', e => { windfalls[idx].wfMonth = +e.target.value; saveState(); renderWindfallList(); render(); });
     row.querySelector('.wf-year-sel').addEventListener('change', e => { windfalls[idx].wfYear = +e.target.value; saveState(); renderWindfallList(); render(); });
+    const visCheck = row.querySelector('.wf-vis');
+    if (visCheck) {
+      visCheck.addEventListener('change', e => {
+        windfalls[idx].visible = e.target.checked;
+        e.target.nextElementSibling.textContent = e.target.checked ? 'Active' : 'Skipped';
+        saveState(); render();
+      });
+    }
     row.querySelector('.remove-btn').addEventListener('click', () => { windfalls.splice(idx, 1); saveState(); renderWindfallList(); render(); });
   });
 }
@@ -440,7 +452,7 @@ let chart = null;
 // ─── main render ──────────────────────────────────────────────────────────────
 function render() {
   const { loan, offset, rate, weeklyRepay } = getInputs();
-  const resolvedWindfalls = windfalls.map(w => ({ ...w, month: wfToOffsetMonth(w) }));
+  const resolvedWindfalls = windfalls.filter(w => w.visible !== false).map(w => ({ ...w, month: wfToOffsetMonth(w) }));
   const allData = scenarios.map(s => generateData(loan, offset, rate, weeklyRepay, s.amount, resolvedWindfalls));
 
   let maxMonth = 60;
@@ -487,12 +499,13 @@ function render() {
     </div>`;
 
   if (windfalls.length > 0) {
-    const totalWf = windfalls.reduce((s, w) => s + (w.amount || 0), 0);
+    const totalWf = windfalls.filter(w => w.visible !== false).reduce((s, w) => s + (w.amount || 0), 0);
+    const hiddenCount = windfalls.filter(w => w.visible === false).length;
     statsHtml += `
     <div class="stat-card" style="border-top-color:var(--gold)">
       <div class="stat-label" style="color:var(--gold)">Total windfalls</div>
       <div class="stat-value" style="color:var(--gold)">${fmtK(totalWf)}</div>
-      <div class="stat-sub">${windfalls.length} lump sum${windfalls.length > 1 ? 's' : ''}</div>
+      <div class="stat-sub">${windfalls.filter(w => w.visible !== false).length} active${hiddenCount > 0 ? ', ' + hiddenCount + ' skipped' : ''}</div>
     </div>`;
   }
 
