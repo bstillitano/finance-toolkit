@@ -234,7 +234,9 @@ const STORAGE_KEY = 'mortgage-calc-v1';
 let windfalls, scenarios, nextWId, nextSId;
 
 // ─── localStorage helpers ─────────────────────────────────────────────────────
+let _initialising = true;
 function saveState() {
+  if (_initialising) return;
   const state = {
     loan:        +document.getElementById('loanBal').value    || 0,
     offset:      +document.getElementById('offsetBal').value  || 0,
@@ -262,16 +264,21 @@ function loadState() {
 }
 
 function applyState(state) {
-  document.getElementById('loanBal').value    = state.loan;
-  document.getElementById('offsetBal').value  = state.offset;
-  document.getElementById('rate').value       = state.rate;
-  document.getElementById('weeklyRepay').value = state.weeklyRepay;
-  if (state.startMonth) document.getElementById('startMonth').value = state.startMonth;
-  if (state.startYear)  document.getElementById('startYear').value  = state.startYear;
-  windfalls = migrateWindfalls(state.windfalls, state.startMonth || 3, state.startYear || 2026);
-  scenarios = state.scenarios;
-  nextWId   = state.nextWId   ?? (Math.max(0, ...windfalls.map(w => w.id))  + 1);
-  nextSId   = state.nextSId   ?? (Math.max(0, ...scenarios.map(s => s.id))  + 1);
+  try {
+    if (state.loan       !== undefined) document.getElementById('loanBal').value     = state.loan;
+    if (state.offset     !== undefined) document.getElementById('offsetBal').value   = state.offset;
+    if (state.rate       !== undefined) document.getElementById('rate').value        = state.rate;
+    if (state.weeklyRepay!== undefined) document.getElementById('weeklyRepay').value = state.weeklyRepay;
+    if (state.startMonth)               document.getElementById('startMonth').value  = state.startMonth;
+    if (state.startYear)                document.getElementById('startYear').value   = state.startYear;
+    windfalls = migrateWindfalls(state.windfalls, state.startMonth || 3, state.startYear || 2026);
+    scenarios = Array.isArray(state.scenarios) ? state.scenarios : JSON.parse(JSON.stringify(DEFAULTS.scenarios));
+    nextWId   = state.nextWId ?? (windfalls.length ? Math.max(...windfalls.map(w => w.id)) + 1 : 1);
+    nextSId   = state.nextSId ?? (scenarios.length ? Math.max(...scenarios.map(s => s.id)) + 1 : 1);
+  } catch(e) {
+    console.warn('applyState failed, falling back to defaults:', e);
+    applyState(JSON.parse(JSON.stringify(DEFAULTS)));
+  }
 }
 
 let saveFlashTimer = null;
@@ -326,11 +333,14 @@ function generateData(loan, offsetStart, rateAnnual, repayWeekly, monthlyAdd, wf
 
 // ─── migrate old windfall format ─────────────────────────────────────────────
 function migrateWindfalls(wfs, startMonth, startYear) {
+  if (!Array.isArray(wfs)) return [];
   return wfs.map(w => {
-    if (w.wfMonth && w.wfYear) return w;
+    if (w && w.wfMonth && w.wfYear) return w;
     // Convert old offset-month integer to calendar month/year
-    const totalMonth = startMonth - 1 + (w.month || 0);
-    return { ...w, wfMonth: (totalMonth % 12) + 1, wfYear: startYear + Math.floor(totalMonth / 12) };
+    const totalMonth = (startMonth - 1) + (w.month || 0);
+    const yr = startYear + Math.floor(totalMonth / 12);
+    const mo = (totalMonth % 12) + 1;
+    return { ...w, wfMonth: mo, wfYear: yr };
   });
 }
 function wfToOffsetMonth(wf) {
@@ -663,6 +673,7 @@ applyState(saved ? saved : JSON.parse(JSON.stringify(DEFAULTS)));
 renderWindfallList();
 renderScenarioList();
 render();
+_initialising = false;
 </script>
 </body>
 </html>
