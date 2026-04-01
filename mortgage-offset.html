@@ -668,12 +668,15 @@ document.getElementById('resetBtn').addEventListener('click', () => {
 });
 
 // ─── init — load saved state or defaults ──────────────────────────────────────
-const saved = loadState();
-applyState(saved ? saved : JSON.parse(JSON.stringify(DEFAULTS)));
-renderWindfallList();
-renderScenarioList();
-render();
-_initialising = false;
+try {
+  const saved = loadState();
+  applyState(saved ? saved : JSON.parse(JSON.stringify(DEFAULTS)));
+  renderWindfallList();
+  renderScenarioList();
+  render();
+} finally {
+  _initialising = false;
+}
 </script>
 </body>
 </html>
