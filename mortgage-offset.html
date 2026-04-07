@@ -125,6 +125,8 @@
     }
 
     .footer { margin-top: 24px; font-size: 11px; color: var(--subtle); text-align: center; }
+    .itv-btn { padding: 5px 14px; border-radius: 20px; border: 1px solid var(--border); cursor: pointer; font-size: 12px; font-family: 'DM Sans', sans-serif; font-weight: 500; background: var(--surface2); color: var(--muted); transition: all 0.15s; }
+    .itv-btn.active { background: var(--blue); border-color: var(--blue); color: #000; }
 
     .tool-nav { padding: 16px 20px 0; max-width: 1080px; margin: 0 auto; }
     .nav-back { color: var(--muted); font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: color 0.15s; }
@@ -187,6 +189,13 @@
   <div class="stats" id="statsRow"></div>
 
   <!-- CHART -->
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap" id="intervalToggle">
+    <span style="font-size:11px;color:var(--muted);align-self:center;letter-spacing:0.5px;text-transform:uppercase;font-weight:600">Interval:</span>
+    <button class="itv-btn active" data-itv="1">Monthly</button>
+    <button class="itv-btn" data-itv="3">Quarterly</button>
+    <button class="itv-btn" data-itv="6">Half-yearly</button>
+    <button class="itv-btn" data-itv="12">Yearly</button>
+  </div>
   <div class="chart-wrap">
     <canvas id="myChart" height="280"></canvas>
   </div>
@@ -448,6 +457,7 @@ function renderScenarioList() {
 
 // ─── chart ────────────────────────────────────────────────────────────────────
 let chart = null;
+let chartInterval = 1; // months per data point
 
 // ─── main render ──────────────────────────────────────────────────────────────
 function render() {
@@ -534,10 +544,12 @@ function render() {
   document.getElementById('statsRow').innerHTML = statsHtml;
 
   // ── chart ───────────────────────────────────────────────────────────────────
-  const labels = Array.from({ length: maxMonth + 1 }, (_, i) => i);
+  const chartPoints = [];
+  for (let m = 0; m <= maxMonth; m += chartInterval) chartPoints.push(m);
+  const labels = chartPoints.map(m => monthLabel(m));
   const datasets = [{
     label: 'Loan Balance',
-    data: labels.map(m => allData[0][m] ? allData[0][m].loan : null),
+    data: chartPoints.map(m => allData[0][m] ? allData[0][m].loan : null),
     borderColor: '#f78166', borderWidth: 2, borderDash: [6, 3], pointRadius: 0, tension: 0.3,
   }];
 
@@ -546,8 +558,8 @@ function render() {
     const color = colorFor(idx);
     const d = allData[idx];
     const lbl = s.label || ('Scenario ' + (idx + 1));
-    datasets.push({ label: lbl + ' – Offset',    data: labels.map(m => d[m] ? d[m].offset    : null), borderColor: color, borderWidth: 1,   borderDash: [3, 3], pointRadius: 0, tension: 0.3 });
-    datasets.push({ label: lbl + ' – Effective', data: labels.map(m => d[m] ? d[m].effective : null), borderColor: color, borderWidth: 2.5,                     pointRadius: 0, tension: 0.3 });
+    datasets.push({ label: lbl + ' – Offset',    data: chartPoints.map(m => d[m] ? d[m].offset    : null), borderColor: color, borderWidth: 1,   borderDash: [3, 3], pointRadius: 0, tension: 0.3 });
+    datasets.push({ label: lbl + ' – Effective', data: chartPoints.map(m => d[m] ? d[m].effective : null), borderColor: color, borderWidth: 2.5,                     pointRadius: 0, tension: 0.3 });
   });
 
   if (chart) chart.destroy();
@@ -648,6 +660,15 @@ document.getElementById('addScenarioBtn').addEventListener('click', () => {
   const nextAmount = amounts[scenarios.length] ?? (scenarios[scenarios.length - 1].amount + 5000);
   scenarios.push({ id: nextSId++, label: 'Scenario ' + (scenarios.length + 1), amount: nextAmount, visible: true });
   saveState(); renderScenarioList(); render();
+});
+
+document.querySelectorAll('.itv-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    chartInterval = +btn.dataset.itv;
+    document.querySelectorAll('.itv-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    render();
+  });
 });
 
 document.getElementById('resetBtn').addEventListener('click', () => {
