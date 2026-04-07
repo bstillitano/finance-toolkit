@@ -135,7 +135,7 @@
     /* ── mortgage tabs ─────────────────────────────────────────── */
     .tab-bar { display: flex; align-items: stretch; gap: 0; margin-bottom: 20px; border-bottom: 2px solid var(--border); overflow-x: auto; }
     .tab-bar::-webkit-scrollbar { display: none; }
-    .tab-btn { display: flex; align-items: center; gap: 6px; padding: 10px 18px; border: none; background: none; color: var(--muted); font-size: 13px; font-family: 'DM Sans', sans-serif; font-weight: 500; cursor: pointer; white-space: nowrap; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color 0.15s, border-color 0.15s; flex-shrink: 0; }
+    .tab-btn { display: flex; align-items: center; gap: 6px; padding: 10px 18px; border: none; border-bottom: 2px solid transparent; background: none; color: var(--muted); font-size: 13px; font-family: 'DM Sans', sans-serif; font-weight: 500; cursor: pointer; white-space: nowrap; margin-bottom: -2px; transition: color 0.15s, border-color 0.15s; flex-shrink: 0; user-select: none; }
     .tab-btn:hover { color: var(--text); }
     .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
     .tab-btn .tab-name { outline: none; background: none; border: none; color: inherit; font: inherit; pointer-events: none; }
@@ -414,10 +414,10 @@ function generateData(loan, offsetStart, rateAnnual, repayWeekly, monthlyAdd, wf
 function renderTabs() {
   const bar = document.getElementById('tabBar');
   bar.innerHTML = mortgages.map(m => `
-    <button class="tab-btn${m.id === activeMortgageId ? ' active' : ''}" data-id="${m.id}">
+    <div class="tab-btn${m.id === activeMortgageId ? ' active' : ''}" role="tab" data-id="${m.id}">
       ${m.id === activeMortgageId ? `<input class="tab-input" value="${m.name}" spellcheck="false" size="${Math.max(m.name.length, 4)}">` : `<span class="tab-name">${m.name}</span>`}
       ${mortgages.length > 1 ? `<span class="tab-close" data-close="${m.id}">&times;</span>` : ''}
-    </button>
+    </div>
   `).join('');
 
   bar.querySelectorAll('.tab-btn').forEach(btn => {
@@ -435,8 +435,6 @@ function renderTabs() {
         tabInput.size = Math.max(tabInput.value.length || 1, 4);
       });
       tabInput.addEventListener('click', e => e.stopPropagation());
-      tabInput.addEventListener('keydown', e => { if (e.key === ' ') e.stopPropagation(); });
-      tabInput.addEventListener('keyup', e => { if (e.key === ' ') e.stopPropagation(); });
       tabInput.addEventListener('blur', () => {
         const m = mortgages.find(x => x.id === id);
         if (m) { m.name = tabInput.value.trim() || 'Mortgage'; saveState(); }
