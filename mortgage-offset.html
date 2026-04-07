@@ -537,7 +537,22 @@ function render() {
   document.getElementById('statsFixed').innerHTML = fixedHtml;
 
   // ── scenario stat cards (one per scenario, always same row on desktop) ────
-  let scenariosHtml = '';
+  // First card: no-offset baseline
+  const baseLz = baseData.find(p => p.loan === 0);
+  const baseTotalInterest = totalInterestBase;
+  let scenariosHtml = `
+    <div class="stat-card" style="border-top-color:var(--subtle)">
+      <div class="stat-label" style="color:var(--muted)">No offset (baseline)</div>
+      <div class="stat-value" style="color:var(--muted);font-size:11px;margin-bottom:4px">
+        Loan $0: ${baseLz ? 'Mo.' + baseLz.month + ' &middot; ' + monthLabel(baseLz.month) : '&mdash;'}
+      </div>
+      <div class="stat-value" style="font-size:11px;color:var(--muted);margin-bottom:2px">
+        Total interest: $${baseTotalInterest.toLocaleString()}
+      </div>
+      <div class="stat-value" style="font-size:11px;color:var(--subtle)">
+        No offset &middot; no extra contributions
+      </div>
+    </div>`;
   scenarios.forEach((s, idx) => {
     const color = colorFor(idx);
     const d     = allData[idx];
