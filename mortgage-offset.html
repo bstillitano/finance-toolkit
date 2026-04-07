@@ -125,8 +125,9 @@
     }
 
     .footer { margin-top: 24px; font-size: 11px; color: var(--subtle); text-align: center; }
-    .itv-btn { padding: 5px 14px; border-radius: 20px; border: 1px solid var(--border); cursor: pointer; font-size: 12px; font-family: 'DM Sans', sans-serif; font-weight: 500; background: var(--surface2); color: var(--muted); transition: all 0.15s; }
-    .itv-btn.active { background: var(--blue); border-color: var(--blue); color: #000; }
+    .itv-btn { padding: 3px 10px; border-radius: 4px; border: 1px solid var(--border); cursor: pointer; font-size: 11px; font-family: 'DM Mono', monospace; font-weight: 400; background: transparent; color: var(--muted); transition: all 0.15s; }
+    .itv-btn:hover { color: var(--text); border-color: var(--subtle); }
+    .itv-btn.active { background: var(--surface2); border-color: var(--subtle); color: var(--text); }
 
     .tool-nav { padding: 16px 20px 0; max-width: 1080px; margin: 0 auto; }
     .nav-back { color: var(--muted); font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: color 0.15s; }
@@ -189,14 +190,14 @@
   <div class="stats" id="statsRow"></div>
 
   <!-- CHART -->
-  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap" id="intervalToggle">
-    <span style="font-size:11px;color:var(--muted);align-self:center;letter-spacing:0.5px;text-transform:uppercase;font-weight:600">Interval:</span>
-    <button class="itv-btn active" data-itv="1">Monthly</button>
-    <button class="itv-btn" data-itv="3">Quarterly</button>
-    <button class="itv-btn" data-itv="6">Half-yearly</button>
-    <button class="itv-btn" data-itv="12">Yearly</button>
-  </div>
   <div class="chart-wrap">
+    <div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-bottom:14px">
+      <span style="font-size:10px;color:var(--muted);letter-spacing:0.8px;text-transform:uppercase;margin-right:4px">Interval</span>
+      <button class="itv-btn active" data-itv="1">Monthly</button>
+      <button class="itv-btn" data-itv="3">Quarterly</button>
+      <button class="itv-btn" data-itv="6">6-monthly</button>
+      <button class="itv-btn" data-itv="12">Yearly</button>
+    </div>
     <canvas id="myChart" height="280"></canvas>
   </div>
 
