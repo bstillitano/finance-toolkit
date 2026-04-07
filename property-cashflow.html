@@ -74,7 +74,7 @@ const DEFAULTS = { price:700000,loanAmt:560000,intRate:6,loanType:'io',weeklyRen
 let saveTimer = null;
 function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
 function save() { const s = {}; IDS.forEach(id => s[id] = document.getElementById(id).value); localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); flashSaved();
-  if (window.CloudSync) CloudSync.save('property-cashflow', s); }
+  if (window.CloudSync) { CloudSync.save('property-cashflow', s); localStorage.setItem('property-cashflow_updated_at', Date.now().toString()); } }
 function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } }
 function applyState(s) { IDS.forEach(id => { if (s[id] !== undefined) document.getElementById(id).value = s[id]; }); }
 function g(id) { return +document.getElementById(id).value || 0; }
@@ -162,6 +162,6 @@ IDS.forEach(id => document.getElementById(id).addEventListener('input', () => { 
 document.getElementById('resetBtn').addEventListener('click', () => { if (!confirm('Reset?')) return; localStorage.removeItem(STORAGE_KEY); applyState(DEFAULTS); render(); });
 applyState(load() || DEFAULTS); render();
 </script>
-<script>FinanceNav.init({ toolName: 'Property Cash Flow', cloudKey: 'property-cashflow' });</script>
+<script>FinanceNav.init({ toolName: 'Property Cash Flow', cloudKey: 'property-cashflow' , onCloudLoad: function(d) { applyState(d); render(); } });</script>
 </body>
 </html>

@@ -311,7 +311,7 @@ function saveState() {
   try {
     const _state = { mortgages, activeMortgageId, nextMortgageId };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(_state));
-    if (window.CloudSync) CloudSync.save('mortgage-offset', _state);
+    if (window.CloudSync) { CloudSync.save('mortgage-offset', _state); localStorage.setItem('mortgage-offset_updated_at', Date.now().toString()); }
     flashSaved();
   } catch(e) { console.warn('saveState failed:', e); }
 }
@@ -813,6 +813,10 @@ document.querySelectorAll('.itv-btn').forEach(btn => {
   });
 });
 </script>
-<script>FinanceNav.init({ toolName: 'Mortgage Offset Calculator', cloudKey: 'mortgage-offset' });</script>
+<script>FinanceNav.init({ toolName: 'Mortgage Offset Calculator', cloudKey: 'mortgage-offset' , onCloudLoad: function(d) {
+  applyLoadedState(d);
+  applyMortgageToForm(activeMortgage());
+  renderTabs(); renderWindfallList(); renderScenarioList(); render();
+} });</script>
 </body>
 </html>

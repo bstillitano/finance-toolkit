@@ -82,17 +82,25 @@
           const { data, error } = await sb
             .from('tool_states')
             .select('data, updated_at')
+            .eq('user_id', currentUser.id)
             .eq('tool', toolKey)
             .single();
 
           if (!error && data) {
-            // Compare with local timestamp
-            const localRaw = localStorage.getItem(toolKey + '_updated_at');
-            const cloudTime = new Date(data.updated_at).getTime();
-            const localTime = localRaw ? parseInt(localRaw, 10) : 0;
+            const hasLocal   = !!localStorage.getItem(toolKey);
+            const cloudTime  = new Date(data.updated_at).getTime();
+            const localTsRaw = localStorage.getItem(toolKey + '_updated_at');
+            const localTime  = localTsRaw ? parseInt(localTsRaw, 10) : 0;
+
+            if (!hasLocal) {
+              // Nothing local — silently adopt cloud data
+              localStorage.setItem(toolKey, JSON.stringify(data.data));
+              localStorage.setItem(toolKey + '_updated_at', cloudTime.toString());
+              return data.data;
+            }
 
             if (cloudTime > localTime) {
-              // Cloud is newer — offer to use it
+              // Cloud is newer than local — ask user
               const useCloud = await showConflictPrompt(cloudTime, localTime);
               if (useCloud) {
                 localStorage.setItem(toolKey, JSON.stringify(data.data));
@@ -350,6 +358,12 @@
         if (session) {
           currentUser = session.user;
           refreshAuthArea();
+          // Load cloud data into tool if handler provided
+          if (opts.cloudKey && opts.onCloudLoad) {
+            window.CloudSync.load(opts.cloudKey).then(function (data) {
+              if (data) opts.onCloudLoad(data);
+            }).catch(function (e) { console.warn('Cloud load failed:', e); });
+          }
         }
 
         // Listen for auth state changes

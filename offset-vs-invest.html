@@ -69,7 +69,7 @@ function save() {
   const s = {};
   IDS.forEach(id => s[id] = document.getElementById(id).value);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-  if (window.CloudSync) CloudSync.save('offset-vs-invest', s);
+  if (window.CloudSync) { CloudSync.save('offset-vs-invest', s); localStorage.setItem('offset-vs-invest_updated_at', Date.now().toString()); }
   flashSaved();
 }
 
@@ -204,6 +204,6 @@ const saved = load();
 applyState(saved || DEFAULTS);
 render();
 </script>
-<script>FinanceNav.init({ toolName: 'Offset vs. Invest', cloudKey: 'offset-vs-invest' });</script>
+<script>FinanceNav.init({ toolName: 'Offset vs. Invest', cloudKey: 'offset-vs-invest' , onCloudLoad: function(d) { applyState(d); render(); } });</script>
 </body>
 </html>

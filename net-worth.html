@@ -85,7 +85,7 @@ function flashSaved() { const el = document.getElementById('saveInd'); el.classL
 function saveState() {
   const _nwState = { assets, liabilities, nextAId, nextLId };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(_nwState));
-  if (window.CloudSync) CloudSync.save('net-worth', _nwState);
+  if (window.CloudSync) { CloudSync.save('net-worth', _nwState); localStorage.setItem('net-worth_updated_at', Date.now().toString()); }
   flashSaved();
 }
 
@@ -195,6 +195,12 @@ if (saved) { assets = saved.assets; liabilities = saved.liabilities; nextAId = s
 else { assets = JSON.parse(JSON.stringify(DEFAULT_ASSETS)); liabilities = JSON.parse(JSON.stringify(DEFAULT_LIABILITIES)); nextAId = DEFAULT_ASSETS.length + 1; nextLId = DEFAULT_LIABILITIES.length + 1; }
 init();
 </script>
-<script>FinanceNav.init({ toolName: 'Net Worth Tracker', cloudKey: 'net-worth' });</script>
+<script>FinanceNav.init({ toolName: 'Net Worth Tracker', cloudKey: 'net-worth' , onCloudLoad: function(d) {
+  assets = d.assets || []; liabilities = d.liabilities || [];
+  nextAId = d.nextAId || 1; nextLId = d.nextLId || 1;
+  renderList('assetList', assets, 'asset');
+  renderList('liabilityList', liabilities, 'liability');
+  renderChart();
+} });</script>
 </body>
 </html>

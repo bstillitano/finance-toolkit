@@ -83,7 +83,7 @@ const DEFAULTS = { a_amount:600000,a_rate:6,a_term:30,a_type:'pi',a_offset:50000
 let saveTimer = null;
 function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
 function save() { const s = {}; IDS.forEach(id => s[id] = document.getElementById(id).value); localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); flashSaved();
-  if (window.CloudSync) CloudSync.save('loan-comparison', s); }
+  if (window.CloudSync) { CloudSync.save('loan-comparison', s); localStorage.setItem('loan-comparison_updated_at', Date.now().toString()); } }
 function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } }
 function applyState(s) { IDS.forEach(id => { if (s[id] !== undefined) document.getElementById(id).value = s[id]; }); }
 function g(id) { return +document.getElementById(id).value || 0; }
@@ -181,6 +181,6 @@ IDS.forEach(id => document.getElementById(id).addEventListener('input', () => { 
 document.getElementById('resetBtn').addEventListener('click', () => { if (!confirm('Reset?')) return; localStorage.removeItem(STORAGE_KEY); applyState(DEFAULTS); render(); });
 applyState(load() || DEFAULTS); render();
 </script>
-<script>FinanceNav.init({ toolName: 'Loan Comparison', cloudKey: 'loan-comparison' });</script>
+<script>FinanceNav.init({ toolName: 'Loan Comparison', cloudKey: 'loan-comparison' , onCloudLoad: function(d) { applyState(d); render(); } });</script>
 </body>
 </html>

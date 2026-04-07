@@ -71,7 +71,7 @@ const DEFAULTS = { state:'NSW', price:700000, purchaserType:'owner', propType:'e
 let saveTimer = null;
 function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
 function save() { const s = {}; IDS.forEach(id => s[id] = document.getElementById(id).value); localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); flashSaved();
-  if (window.CloudSync) CloudSync.save('stamp-duty', s); }
+  if (window.CloudSync) { CloudSync.save('stamp-duty', s); localStorage.setItem('stamp-duty_updated_at', Date.now().toString()); } }
 function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } }
 function applyState(s) { IDS.forEach(id => { if (s[id] !== undefined) document.getElementById(id).value = s[id]; }); }
 function g(id) { return +document.getElementById(id).value || 0; }
@@ -230,6 +230,6 @@ IDS.forEach(id => document.getElementById(id).addEventListener('input', () => { 
 document.getElementById('resetBtn').addEventListener('click', () => { if (!confirm('Reset?')) return; localStorage.removeItem(STORAGE_KEY); applyState(DEFAULTS); render(); });
 applyState(load() || DEFAULTS); render();
 </script>
-<script>FinanceNav.init({ toolName: 'Stamp Duty Calculator', cloudKey: 'stamp-duty' });</script>
+<script>FinanceNav.init({ toolName: 'Stamp Duty Calculator', cloudKey: 'stamp-duty' , onCloudLoad: function(d) { applyState(d); render(); } });</script>
 </body>
 </html>

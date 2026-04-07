@@ -75,7 +75,7 @@ const DEFAULTS = { repayment: 2000, frequency: 'monthly', rate: 6.00, term: 30, 
 let saveTimer = null;
 function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
 function save() { const s = {}; IDS.forEach(id => s[id] = document.getElementById(id).value); localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); flashSaved();
-  if (window.CloudSync) CloudSync.save('repayment-to-loan', s); }
+  if (window.CloudSync) { CloudSync.save('repayment-to-loan', s); localStorage.setItem('repayment-to-loan_updated_at', Date.now().toString()); } }
 function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } }
 function applyState(s) { IDS.forEach(id => { if (s[id] !== undefined) document.getElementById(id).value = s[id]; }); }
 function g(id) { return +document.getElementById(id).value || 0; }
@@ -207,6 +207,6 @@ document.getElementById('resetBtn').addEventListener('click', () => {
 applyState(load() || DEFAULTS);
 render();
 </script>
-<script>FinanceNav.init({ toolName: 'Repayment to Loan Size', cloudKey: 'repayment-to-loan' });</script>
+<script>FinanceNav.init({ toolName: 'Repayment to Loan Size', cloudKey: 'repayment-to-loan' , onCloudLoad: function(d) { applyState(d); render(); } });</script>
 </body>
 </html>
