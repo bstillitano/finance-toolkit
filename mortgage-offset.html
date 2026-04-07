@@ -471,9 +471,14 @@ function render() {
 
   const wfMonths    = new Set(resolvedWindfalls.filter(w => w.amount > 0).map(w => w.month));
   const wfMilestones = resolvedWindfalls.filter(w => w.amount > 0).map(w => w.month);
-  const base        = [0, 6, 12, 18, 24, 36, 48, 60, 84, 120, 180, 240];
-  const tail        = maxMonth > 0 ? [maxMonth - 2, maxMonth - 1, maxMonth] : [];
-  const milestones  = [...new Set([...base, ...wfMilestones, ...tail])].filter(m => m >= 0 && m <= maxMonth + 1).sort((a, b) => a - b);
+
+  // Table rows driven by the same interval as the chart
+  const intervalRows = [];
+  for (let m = 0; m <= maxMonth; m += chartInterval) intervalRows.push(m);
+  // Always include windfall months and the final loan-zero month
+  const tail = maxMonth > 0 ? [maxMonth] : [];
+  const milestones = [...new Set([...intervalRows, ...wfMilestones, ...tail])]
+    .filter(m => m >= 0 && m <= maxMonth + 1).sort((a, b) => a - b);
 
   // ── stat cards ──────────────────────────────────────────────────────────────
   const effNow             = Math.max(loan - offset, 0);
