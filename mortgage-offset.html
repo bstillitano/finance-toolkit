@@ -93,8 +93,15 @@
     }
     .add-btn:hover { border-color: #58a6ff; color: #58a6ff; }
 
-    .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
-    .stat-card { flex: 1 1 160px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; border-top: 2px solid var(--border); }
+    .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+    .stats-scenarios { flex-wrap: nowrap; margin-bottom: 20px; }
+    .stats-scenarios .stat-card { flex: 1 1 0; min-width: 0; }
+    .stats-fixed .stat-card { flex: 1 1 160px; }
+    @media (max-width: 600px) {
+      .stats-scenarios { flex-wrap: wrap; }
+      .stats-scenarios .stat-card { flex: 1 1 100%; }
+    }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; border-top: 2px solid var(--border); }
     .stat-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
     .stat-value { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; }
 
@@ -187,7 +194,8 @@
   </div>
 
   <!-- STATS -->
-  <div class="stats" id="statsRow"></div>
+  <div class="stats stats-fixed" id="statsFixed"></div>
+  <div class="stats stats-scenarios" id="statsScenarios"></div>
 
   <!-- CHART -->
   <div class="chart-wrap">
@@ -493,7 +501,8 @@ function render() {
     monthsSaved: baseData.length - d.length,
   }));
 
-  let statsHtml = `
+  // ── fixed stat cards (interest, offset, windfalls) ────────────────────────
+  let fixedHtml = `
     <div class="stat-card">
       <div class="stat-label">Effective balance today</div>
       <div class="stat-value" style="color:#e6edf3">${fmtK(effNow)}</div>
@@ -517,14 +526,18 @@ function render() {
   if (windfalls.length > 0) {
     const totalWf = windfalls.filter(w => w.visible !== false).reduce((s, w) => s + (w.amount || 0), 0);
     const hiddenCount = windfalls.filter(w => w.visible === false).length;
-    statsHtml += `
+    fixedHtml += `
     <div class="stat-card" style="border-top-color:var(--gold)">
       <div class="stat-label" style="color:var(--gold)">Total windfalls</div>
       <div class="stat-value" style="color:var(--gold)">${fmtK(totalWf)}</div>
-      <div class="stat-sub">${windfalls.filter(w => w.visible !== false).length} active${hiddenCount > 0 ? ', ' + hiddenCount + ' skipped' : ''}</div>
+      <div class="stat-sub">${windfalls.filter(w => w.visible !== false).length} active${hiddenCount > 0 ? ', ' + hiddenCount + ' hidden' : ''}</div>
     </div>`;
   }
 
+  document.getElementById('statsFixed').innerHTML = fixedHtml;
+
+  // ── scenario stat cards (one per scenario, always same row on desktop) ────
+  let scenariosHtml = '';
   scenarios.forEach((s, idx) => {
     const color = colorFor(idx);
     const d     = allData[idx];
@@ -532,7 +545,7 @@ function render() {
     const lz    = d.find(p => p.loan === 0);
     const ss    = scenarioStats[idx];
     const saved = Math.max(0, totalInterestBase - ss.totalInterest);
-    statsHtml += `
+    scenariosHtml += `
     <div class="stat-card" style="border-top-color:${color}">
       <div class="stat-label" style="color:${color}">${s.label || 'Scenario ' + (idx + 1)}</div>
       <div class="stat-value" style="color:${color};font-size:11px;margin-bottom:4px">
@@ -547,7 +560,7 @@ function render() {
     </div>`;
   });
 
-  document.getElementById('statsRow').innerHTML = statsHtml;
+  document.getElementById('statsScenarios').innerHTML = scenariosHtml;
 
   // ── chart ───────────────────────────────────────────────────────────────────
   const chartPoints = [];
