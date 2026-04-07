@@ -14,3 +14,7 @@ Thumbs.db
 # Node (if ever needed)
 node_modules/
 npm-debug.log*
+
+# Supabase runtime config — NEVER commit this file
+# Contains API keys injected by GitHub Actions from repo secrets
+config.js

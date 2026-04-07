@@ -72,3 +72,35 @@ MIT
 | [Net Worth Tracker](net-worth.html) | Assets vs. liabilities dashboard |
 | [FIRE Timeline](fire-timeline.html) | Path to financial independence |
 | [Salary & Tax Optimiser](salary-tax.html) | Take-home pay, super, salary sacrifice |
+
+---
+
+## Authentication & Cloud Sync (Optional)
+
+Tools work fully offline via localStorage. Sign in to sync data across devices.
+
+### Self-hosting with your own Supabase project
+
+1. Create a free project at [supabase.com](https://supabase.com)
+2. Run the migration in [`supabase/migrations/001_tool_states.sql`](supabase/migrations/001_tool_states.sql) in the Supabase SQL editor
+3. Enable **Email** auth in Supabase → Authentication → Providers
+4. Copy `config.example.js` → `config.js` and fill in your project URL and anon key
+5. Open the site locally — auth will work immediately
+
+### Deploying to GitHub Pages with auth
+
+Add these secrets to your GitHub repo (Settings → Secrets → Actions):
+
+| Secret | Value |
+|--------|-------|
+| `SUPABASE_URL` | `https://your-project-ref.supabase.co` |
+| `SUPABASE_ANON_KEY` | Your project's anon key (Settings → API) |
+
+The included GitHub Actions workflow (`.github/workflows/deploy.yml`) injects these at deploy time. The anon key is never committed to the repository.
+
+### Security model
+
+- The **anon key** is designed to be public — it is protected by Row Level Security
+- The **service role key** is never used and never referenced anywhere in this project
+- Each user's data is isolated by RLS policy (`user_id = auth.uid()`)
+- `config.js` is gitignored — it only exists in the deployed environment, injected from secrets
