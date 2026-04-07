@@ -579,7 +579,6 @@ function render() {
   let maxMonth = 60;
   allData.forEach(d => { const lz = d.find(p => p.loan === 0); if (lz) maxMonth = Math.max(maxMonth, lz.month); });
   const baseLz = baseData.find(p => p.loan === 0);
-  if (baseLz) maxMonth = Math.max(maxMonth, baseLz.month);
 
   const wfMonths    = new Set(resolvedWindfalls.filter(w => w.amount > 0).map(w => w.month));
   const wfMilestones = resolvedWindfalls.filter(w => w.amount > 0).map(w => w.month);
