@@ -114,6 +114,9 @@ tr.positive td { color: var(--green); }
 #global-nav {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 .gnav-inner {
   max-width: 1080px;
@@ -130,7 +133,7 @@ tr.positive td { color: var(--green); }
 .gnav-brand { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; }
 .gnav-back  { font-size: 13px; color: var(--muted); text-decoration: none; white-space: nowrap; transition: color 0.15s; }
 .gnav-back:hover { color: var(--text); }
-.gnav-sep   { color: var(--subtle); font-size: 13px; }
+.gnav-sep   { color: var(--subtle); font-size: 13px; padding: 0 4px; }
 .gnav-tool  { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ─── Nav Auth Area ──────────────────────────────────────────────────────── */
