@@ -435,6 +435,8 @@ function renderTabs() {
         tabInput.size = Math.max(tabInput.value.length || 1, 4);
       });
       tabInput.addEventListener('click', e => e.stopPropagation());
+      tabInput.addEventListener('keydown', e => { if (e.key === ' ') e.stopPropagation(); });
+      tabInput.addEventListener('keyup', e => { if (e.key === ' ') e.stopPropagation(); });
       tabInput.addEventListener('blur', () => {
         const m = mortgages.find(x => x.id === id);
         if (m) { m.name = tabInput.value.trim() || 'Mortgage'; saveState(); }
