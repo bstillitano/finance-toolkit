@@ -566,11 +566,18 @@ function render() {
   const chartPoints = [];
   for (let m = 0; m <= maxMonth; m += chartInterval) chartPoints.push(m);
   const labels = chartPoints.map(m => monthLabel(m));
-  const datasets = [{
-    label: 'Loan Balance',
-    data: chartPoints.map(m => allData[0][m] ? allData[0][m].loan : null),
-    borderColor: '#f78166', borderWidth: 2, borderDash: [6, 3], pointRadius: 0, tension: 0.3,
-  }];
+  const datasets = [
+    {
+      label: 'No offset (baseline)',
+      data: chartPoints.map(m => baseData[m] ? baseData[m].loan : null),
+      borderColor: '#30363d', borderWidth: 1.5, borderDash: [3, 3], pointRadius: 0, tension: 0.3,
+    },
+    {
+      label: 'Loan Balance',
+      data: chartPoints.map(m => allData[0][m] ? allData[0][m].loan : null),
+      borderColor: '#f78166', borderWidth: 2, borderDash: [6, 3], pointRadius: 0, tension: 0.3,
+    },
+  ];
 
   scenarios.forEach((s, idx) => {
     if (!s.visible) return;
