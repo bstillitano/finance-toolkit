@@ -157,22 +157,49 @@
   <script src="config.js" onerror="window.APP_CONFIG=window.APP_CONFIG||{}"></script>
   <script type="module">
     const cfg = window.APP_CONFIG || {};
-    if (cfg.firebaseMeasurementId) {
-      const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
-      const { getAnalytics, logEvent } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js');
-      const app = initializeApp({
-        apiKey:            cfg.firebaseApiKey,
-        authDomain:        cfg.firebaseAuthDomain,
-        projectId:         cfg.firebaseProjectId,
-        storageBucket:     cfg.firebaseStorageBucket,
-        messagingSenderId: cfg.firebaseSenderId,
-        appId:             cfg.firebaseAppId,
-        measurementId:     cfg.firebaseMeasurementId,
-      });
-      const analytics = getAnalytics(app);
-      // Expose so tools can log custom events e.g. analytics.logEvent('calculate')
-      window._analytics = analytics;
-      window._logEvent = logEvent;
+    if (!cfg.firebaseMeasurementId) return;
+
+    const { initializeApp }                    = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+    const { getAnalytics, logEvent,
+            setUserId, setUserProperties }     = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js');
+    const { createClient }                     = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+
+    // Initialise Firebase
+    const app = initializeApp({
+      apiKey:            cfg.firebaseApiKey,
+      authDomain:        cfg.firebaseAuthDomain,
+      projectId:         cfg.firebaseProjectId,
+      storageBucket:     cfg.firebaseStorageBucket,
+      messagingSenderId: cfg.firebaseSenderId,
+      appId:             cfg.firebaseAppId,
+      measurementId:     cfg.firebaseMeasurementId,
+    });
+    const analytics = getAnalytics(app);
+
+    // Expose for custom events from any tool
+    window._analytics = analytics;
+    window._logEvent  = logEvent;
+
+    // Identify user via Supabase session
+    if (cfg.supabaseUrl && cfg.supabaseKey) {
+      try {
+        const supabase = createClient(cfg.supabaseUrl, cfg.supabaseKey);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setUserId(analytics, session.user.id);
+          setUserProperties(analytics, {
+            user_type:    'authenticated',
+            email:        session.user.email,
+            email_domain: session.user.email.split('@')[1] ?? 'unknown',
+          });
+        } else {
+          setUserProperties(analytics, { user_type: 'anonymous' });
+        }
+      } catch (e) {
+        setUserProperties(analytics, { user_type: 'anonymous' });
+      }
+    } else {
+      setUserProperties(analytics, { user_type: 'anonymous' });
     }
   </script>
 </head>
