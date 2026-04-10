@@ -54,8 +54,8 @@ html, body { background: var(--bg); color: var(--text); font-family: 'DM Sans', 
 .sep { height: 1px; background: var(--border); margin: 18px 0; }
 
 /* inputs */
-.input-grid { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
-.input-group { flex: 1 1 150px; }
+.input-grid { display: flex; gap: 14px; flex-wrap: wrap; align-items: stretch; }
+.input-group { flex: 1 1 150px; display: flex; flex-direction: column; justify-content: flex-end; }
 .input-group label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 6px; }
 .input-wrap { position: relative; }
 .pfx { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-family: 'DM Mono', monospace; font-size: 12px; pointer-events: none; }

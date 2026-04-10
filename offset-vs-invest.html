@@ -144,50 +144,64 @@ function render() {
   const horizonMonths = years * 12;
 
   // ── Offset scenario: amortisation-aware ────────────────────────────────────
-  // Accumulate interest savings each month, then compound at mortgage rate.
-  // After loan is paid off, the accumulated pot grows at after-tax invest rate.
+  // We track the TOTAL WEALTH of the offset strategy vs investing.
   //
-  // If loan details not provided, fall back to simple perpetual-rate model.
+  // Offset strategy total wealth at any point =
+  //   original amount (still in bank/offset, not spent)
+  //   + cumulative interest saved so far (compounded as if reinvested)
+  //
+  // After loan pays off, offset frees the cash — all of it grows at invest rate.
+  //
+  // Invest strategy = amount compounded at after-tax invest rate from day 1.
+  //
+  // If loan details not provided, fall back to simple model.
   const useAmortisation = loanBal2 > 0 && monthlyRepay;
 
-  const offsetValues = [amount]; // year 0 = starting value
+  const offsetValues = [amount];
   const investValues = [amount];
 
   if (useAmortisation) {
-    let loanRemaining = loanBal2;
-    let offsetUseful  = Math.min(amount, Math.max(0, loanBal2 - curOffset));
-    let savingsPot    = 0; // accumulated interest savings, growing at mortgage rate
+    let loanRemaining    = loanBal2;
+    // How much of 'amount' is actually offsetting (capped by headroom)
+    const offsetUseful   = Math.min(amount, Math.max(0, loanBal2 - curOffset));
+    let cumulativeSaving = 0; // interest saved so far, reinvested at mortgage rate
     let loanPaidOffMonth = null;
+    let totalWealthPostPayoff = 0; // total pot growing at invest rate after payoff
 
     for (let m = 1; m <= horizonMonths; m++) {
       if (loanRemaining > 0) {
-        // Interest saved this month = what we'd have paid on the offset portion
+        // Interest saved this month on the useful offset portion
         const effectiveOffset = Math.min(offsetUseful, loanRemaining);
         const interestSaved   = effectiveOffset * rm;
 
-        // Reinvest that saving into the pot at the mortgage rate
-        savingsPot = savingsPot * (1 + rm) + interestSaved;
+        // Compound existing savings at mortgage rate, add this month's saving
+        cumulativeSaving = cumulativeSaving * (1 + rm) + interestSaved;
 
         // Amortise the loan
-        const interest   = loanRemaining * rm;
-        const principal  = monthlyRepay ? Math.min(monthlyRepay - interest, loanRemaining) : 0;
-        loanRemaining    = Math.max(loanRemaining - principal, 0);
+        const loanInterest = loanRemaining * rm;
+        const principal    = Math.min(monthlyRepay - loanInterest, loanRemaining);
+        loanRemaining      = Math.max(loanRemaining - principal, 0);
 
         if (loanRemaining <= 0 && loanPaidOffMonth === null) {
           loanPaidOffMonth = m;
+          // At payoff: total wealth = original amount (freed) + all savings accumulated
+          totalWealthPostPayoff = amount + cumulativeSaving;
         }
       } else {
-        // Loan paid off — savings pot + original amount now grows at invest rate
-        savingsPot    = savingsPot    * (1 + investRate / 12);
+        // Post payoff: entire pot grows at after-tax invest rate
+        totalWealthPostPayoff = totalWealthPostPayoff * (1 + investRate / 12);
       }
 
       if (m % 12 === 0) {
-        // Total offset "value" = original amount (no longer in offset but freed) + savings accumulated
         const yr = m / 12;
-        const originalFreed = loanPaidOffMonth && m > loanPaidOffMonth
-          ? amount * Math.pow(1 + investRate / 12, m - loanPaidOffMonth)
-          : amount; // still in offset, notional value unchanged
-        offsetValues.push(Math.round(originalFreed + savingsPot));
+        let offsetVal;
+        if (!loanPaidOffMonth || m <= loanPaidOffMonth) {
+          // During loan: wealth = original amount still in offset + savings so far
+          offsetVal = amount + cumulativeSaving;
+        } else {
+          offsetVal = totalWealthPostPayoff;
+        }
+        offsetValues.push(Math.round(offsetVal));
         investValues.push(Math.round(amount * Math.pow(1 + investRate, yr)));
       }
     }
