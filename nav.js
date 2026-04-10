@@ -60,10 +60,14 @@
       clearTimeout(syncDebounceTimers[toolKey]);
       syncDebounceTimers[toolKey] = setTimeout(async function () {
         try {
-          await sb.from('tool_states').upsert(
+          const { data: saved } = await sb.from('tool_states').upsert(
             { user_id: currentUser.id, tool: toolKey, data: data },
             { onConflict: 'user_id,tool' }
-          );
+          ).select('updated_at').single();
+          // Sync local timestamp to Supabase's actual updated_at so they agree on next load
+          if (saved && saved.updated_at) {
+            localStorage.setItem(toolKey + '_updated_at', new Date(saved.updated_at).getTime().toString());
+          }
           updateSyncIndicator('synced');
         } catch (e) {
           console.warn('Cloud sync save failed:', e);
@@ -99,8 +103,8 @@
               return data.data;
             }
 
-            if (cloudTime > localTime) {
-              // Cloud is newer than local — ask user
+            if (cloudTime > localTime + 60000) {
+              // Cloud is more than 60s newer — genuine conflict, ask user
               const useCloud = await showConflictPrompt(cloudTime, localTime);
               if (useCloud) {
                 localStorage.setItem(toolKey, JSON.stringify(data.data));
