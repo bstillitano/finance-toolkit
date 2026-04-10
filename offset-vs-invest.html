@@ -30,6 +30,7 @@
       <div class="input-group"><label>Marginal Tax Rate (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="taxRate" value="37" step="1"></div></div>
       <div class="input-group"><label>Loan Balance <span style="font-weight:400;color:var(--subtle)">(optional)</span></label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="loanBal" value="" step="10000" placeholder="e.g. 500000"></div></div>
       <div class="input-group"><label>Current Offset Balance <span style="font-weight:400;color:var(--subtle)">(optional)</span></label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="currentOffset" value="" step="5000" placeholder="e.g. 80000"></div></div>
+      <div class="input-group"><label>Remaining Loan Term (years) <span style="font-weight:400;color:var(--subtle)">(optional)</span></label><div class="input-wrap"><span class="pfx">yr</span><input type="number" id="loanTerm" value="" step="1" min="1" max="40" placeholder="e.g. 25"></div></div>
     </div>
     <div class="sep"></div>
     <div class="section-title">Investment Assumptions</div>
@@ -58,8 +59,8 @@
 
 <script>
 const STORAGE_KEY = 'offset-vs-invest-v1';
-const DEFAULTS = { mortgageRate: 6.00, taxRate: 37, investReturn: 9.00, investType: 'growth', amount: 50000, years: 10, loanBal: '', currentOffset: '' };
-const IDS = ['mortgageRate','taxRate','investReturn','investType','amount','years','loanBal','currentOffset'];
+const DEFAULTS = { mortgageRate: 6.00, taxRate: 37, investReturn: 9.00, investType: 'growth', amount: 50000, years: 10, loanBal: '', currentOffset: '', loanTerm: '' };
+const IDS = ['mortgageRate','taxRate','investReturn','investType','amount','years','loanBal','currentOffset','loanTerm'];
 
 let saveTimer = null;
 function flashSaved() {
@@ -133,10 +134,24 @@ function render() {
   // Invest: after-tax return
   const investRate = calcAfterTaxReturn(ir * 100, g('taxRate'), type) / 100;
 
-  // Year-by-year values
+  const loanTerm = g('loanTerm');
+
+  // Year-by-year values — two-phase offset model
+  // Phase 1 (during loan): offset earns mortgage rate
+  // Phase 2 (post loan payoff): freed capital earns investment rate
   const offsetValues = [], investValues = [];
   for (let y = 0; y <= years; y++) {
-    offsetValues.push(Math.round(amount * Math.pow(1 + offsetRate, y)));
+    let offsetVal;
+    if (!loanTerm || y <= loanTerm) {
+      // Still within loan term — offset saving mortgage interest
+      offsetVal = Math.round(amount * Math.pow(1 + offsetRate, y));
+    } else {
+      // Loan paid off — capital freed, now invested at after-tax return
+      const valueAtPayoff = amount * Math.pow(1 + offsetRate, loanTerm);
+      const yearsPostPayoff = y - loanTerm;
+      offsetVal = Math.round(valueAtPayoff * Math.pow(1 + investRate, yearsPostPayoff));
+    }
+    offsetValues.push(offsetVal);
     investValues.push(Math.round(amount * Math.pow(1 + investRate, y)));
   }
 
@@ -159,7 +174,7 @@ function render() {
     <div class="stat-card" style="border-top-color:var(--blue)">
       <div class="stat-label">Offset effective return</div>
       <div class="stat-value" style="color:var(--blue)">${(offsetRate*100).toFixed(2)}% tax-free</div>
-      <div class="stat-sub">Equiv. taxable: ${taxFreeEquiv.toFixed(2)}%</div>
+      <div class="stat-sub">${loanTerm ? 'During loan, then invested at ' + (investRate*100).toFixed(2) + '%' : 'Equiv. taxable: ' + taxFreeEquiv.toFixed(2) + '%'}</div>
     </div>
     <div class="stat-card" style="border-top-color:var(--green)">
       <div class="stat-label">Investment after-tax return</div>
@@ -181,7 +196,7 @@ function render() {
   const cfg = {
     type: 'line',
     data: { labels, datasets: [
-      { label: 'Offset', data: offsetValues, borderColor: '#58a6ff', borderWidth: 2.5, pointRadius: 0, tension: 0.3, fill: false },
+      { label: loanTerm ? 'Offset (2-phase)' : 'Offset', data: offsetValues, borderColor: '#58a6ff', borderWidth: 2.5, pointRadius: loanTerm ? offsetValues.map((_, i) => i === loanTerm ? 5 : 0) : 0, tension: 0.3, fill: false },
       { label: 'Invest', data: investValues, borderColor: '#3fb950', borderWidth: 2.5, pointRadius: 0, tension: 0.3, fill: false },
     ]},
     options: {
