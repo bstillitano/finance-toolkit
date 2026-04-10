@@ -54,7 +54,7 @@ html, body { background: var(--bg); color: var(--text); font-family: 'DM Sans', 
 .sep { height: 1px; background: var(--border); margin: 18px 0; }
 
 /* inputs */
-.input-grid { display: flex; gap: 14px; flex-wrap: wrap; }
+.input-grid { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
 .input-group { flex: 1 1 150px; }
 .input-group label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 6px; }
 .input-wrap { position: relative; }
