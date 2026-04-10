@@ -18,4 +18,9 @@
 window.APP_CONFIG = {
   supabaseUrl:  'https://YOUR_PROJECT_REF.supabase.co',
   supabaseKey:  'YOUR_ANON_KEY_HERE',
+
+  // Google Analytics 4 Measurement ID (optional)
+  // Create a GA4 property at https://analytics.google.com and paste your
+  // Measurement ID here. Leave blank to disable analytics.
+  gaMeasurementId: 'G-XXXXXXXXXX',
 };

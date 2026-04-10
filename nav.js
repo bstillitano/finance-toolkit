@@ -27,6 +27,18 @@
     cfg.supabaseUrl !== PLACEHOLDER
   );
 
+  // ─── google analytics ──────────────────────────────────────────────────────
+  if (cfg.gaMeasurementId) {
+    var gaScript = document.createElement('script');
+    gaScript.async = true;
+    gaScript.src = 'https://www.googletagmanager.com/gtag/js?id=' + cfg.gaMeasurementId;
+    document.head.appendChild(gaScript);
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function() { window.dataLayer.push(arguments); };
+    window.gtag('js', new Date());
+    window.gtag('config', cfg.gaMeasurementId);
+  }
+
   // ─── supabase client ───────────────────────────────────────────────────────
   let sb = null;
   if (supabaseConfigured) {
