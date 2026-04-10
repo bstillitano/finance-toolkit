@@ -10,13 +10,26 @@
   <script src="nav.js"></script>
   <style>
     .landing { max-width: 1080px; margin: 0 auto; padding: 60px 24px 80px; }
-    .hero { margin-bottom: 52px; }
+    .hero { margin-bottom: 40px; }
     .hero h1 { font-size: 38px; font-weight: 600; letter-spacing: -1px; margin-bottom: 12px; }
     .hero p { font-size: 16px; color: var(--muted); max-width: 520px; line-height: 1.6; }
+    .home-tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 36px; }
+    .home-tab { background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px;
+      color: var(--muted); cursor: pointer; font-size: 14px; font-family: 'DM Sans', sans-serif;
+      font-weight: 500; padding: 10px 20px; transition: color 0.15s, border-color 0.15s; }
+    .home-tab:hover { color: var(--text); }
+    .home-tab.active { color: var(--text); border-bottom-color: var(--blue); }
+    .fav-badge { background: var(--blue); color: #000; border-radius: 10px; font-size: 10px;
+      font-weight: 700; padding: 1px 6px; margin-left: 6px; display: none; }
+    .fav-badge.show { display: inline; }
     .category { margin-bottom: 40px; }
-    .category-title { font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+    .category-title { font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
     .tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
-    .tool-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px; text-decoration: none; color: var(--text); transition: border-color 0.15s, transform 0.15s, background 0.15s; display: flex; flex-direction: column; gap: 10px; position: relative; overflow: hidden; }
+    .tool-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 22px; text-decoration: none; color: var(--text);
+      transition: border-color 0.15s, transform 0.15s, background 0.15s;
+      display: flex; flex-direction: column; gap: 10px; position: relative; overflow: hidden; }
     .tool-card:hover { border-color: var(--subtle); background: var(--surface2); transform: translateY(-1px); }
     .card-accent { position: absolute; top: 0; left: 0; right: 0; height: 2px; }
     .card-icon { font-size: 22px; line-height: 1; }
@@ -24,6 +37,17 @@
     .card-desc { font-size: 13px; color: var(--muted); line-height: 1.5; flex: 1; }
     .card-arrow { font-size: 16px; color: var(--subtle); align-self: flex-end; transition: color 0.15s, transform 0.15s; }
     .tool-card:hover .card-arrow { color: var(--blue); transform: translateX(2px); }
+    .star-btn { position: absolute; top: 14px; right: 14px; background: none; border: none;
+      cursor: pointer; font-size: 18px; line-height: 1; padding: 4px; color: var(--subtle);
+      transition: color 0.15s, transform 0.15s; z-index: 2;
+      -webkit-appearance: none; appearance: none; }
+    .star-btn:hover { color: var(--gold); transform: scale(1.15); }
+    .star-btn.starred { color: var(--gold); }
+    .empty-state { display: flex; flex-direction: column; align-items: center;
+      text-align: center; padding: 80px 24px; color: var(--muted); }
+    .empty-icon { font-size: 48px; margin-bottom: 20px; opacity: 0.4; }
+    .empty-state h3 { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+    .empty-state p { font-size: 14px; line-height: 1.6; max-width: 320px; margin: 0 auto; }
     site-footer { display: block; text-align: center; color: var(--subtle); font-size: 12px; margin-top: 40px; }
     site-footer a { color: var(--muted); text-decoration: none; }
     site-footer a:hover { color: var(--text); }
@@ -37,105 +61,133 @@
     <p>Open-source calculators for mortgages, investing, retirement planning and tax — built for Australians.</p>
   </div>
 
-  <div class="category">
-    <div class="category-title">Mortgage &amp; Property</div>
-    <div class="tool-grid">
-      <a href="mortgage-offset.html" class="tool-card">
-        <div class="card-accent" style="background:var(--blue)"></div>
-        <div class="card-icon">🏠</div>
-        <div class="card-title">Mortgage Offset Calculator</div>
-        <div class="card-desc">Model how offset contributions and lump-sum windfalls accelerate your mortgage payoff across multiple scenarios.</div>
-        <div class="card-arrow">&#8594;</div>
-      </a>
-      <a href="loan-comparison.html" class="tool-card">
-        <div class="card-accent" style="background:var(--purple)"></div>
-        <div class="card-icon">&#9878;&#65039;</div>
-        <div class="card-title">Loan Comparison</div>
-        <div class="card-desc">Compare two mortgages side by side — rates, terms, offset vs. no offset, P&amp;I vs. interest only.</div>
-        <div class="card-arrow">&#8594;</div>
-      </a>
-      <a href="repayment-to-loan.html" class="tool-card">
-        <div class="card-accent" style="background:var(--blue)"></div>
-        <div class="card-icon">🔢</div>
-        <div class="card-title">Repayment to Loan Size</div>
-        <div class="card-desc">Enter what you can afford to repay each week, fortnight, or month and find the maximum loan you could service.</div>
-        <div class="card-arrow">&#8594;</div>
-      </a>
-      <a href="property-cashflow.html" class="tool-card">
-        <div class="card-accent" style="background:var(--gold)"></div>
-        <div class="card-icon">🏘️</div>
-        <div class="card-title">Property Cash Flow</div>
-        <div class="card-desc">Analyse an investment property's pre and post-tax yield, negative gearing benefit, and net cash position.</div>
-        <div class="card-arrow">&#8594;</div>
-      </a>
-      <a href="stamp-duty.html" class="tool-card">
-        <div class="card-accent" style="background:var(--red)"></div>
-        <div class="card-icon">📄</div>
-        <div class="card-title">Stamp Duty Calculator</div>
-        <div class="card-desc">Calculate stamp duty for any Australian state. Supports owner-occupier, investor, and first home buyer concessions.</div>
-        <div class="card-arrow">&#8594;</div>
-      </a>
-      <a href="rent-vs-buy.html" class="tool-card">
-        <div class="card-accent" style="background:var(--green)"></div>
-        <div class="card-icon">🔑</div>
-        <div class="card-title">Rent vs. Buy</div>
-        <div class="card-desc">Find the break-even horizon where buying beats renting, accounting for stamp duty, opportunity cost, and growth.</div>
-        <div class="card-arrow">&#8594;</div>
-      </a>
-      <a href="borrowing-capacity.html" class="tool-card">
-        <div class="card-accent" style="background:var(--muted)"></div>
-        <div class="card-icon">💳</div>
-        <div class="card-title">Borrowing Capacity</div>
-        <div class="card-desc">Estimate your maximum loan size based on income, expenses, and existing liabilities.</div>
-        <div class="card-arrow">&#8594;</div>
-      </a>
+  <div class="home-tabs">
+    <button class="home-tab active" id="tab-all">All Tools</button>
+    <button class="home-tab" id="tab-fav">Favourites <span class="fav-badge" id="fav-badge"></span></button>
+  </div>
+
+  <!-- All Tools -->
+  <div id="view-all">
+    <div class="category">
+      <div class="category-title">Mortgage &amp; Property</div>
+      <div class="tool-grid">
+        <a href="mortgage-offset.html" class="tool-card" data-tool="mortgage-offset">
+          <button class="star-btn" title="Add to favourites">&#9733;</button>
+          <div class="card-accent" style="background:var(--blue)"></div>
+          <div class="card-icon">🏠</div>
+          <div class="card-title">Mortgage Offset Calculator</div>
+          <div class="card-desc">Model how offset contributions and lump-sum windfalls accelerate your mortgage payoff across multiple scenarios.</div>
+          <div class="card-arrow">&#8594;</div>
+        </a>
+        <a href="loan-comparison.html" class="tool-card" data-tool="loan-comparison">
+          <button class="star-btn" title="Add to favourites">&#9733;</button>
+          <div class="card-accent" style="background:var(--purple)"></div>
+          <div class="card-icon">&#9878;&#65039;</div>
+          <div class="card-title">Loan Comparison</div>
+          <div class="card-desc">Compare two mortgages side by side — rates, terms, offset vs. no offset, P&amp;I vs. interest only.</div>
+          <div class="card-arrow">&#8594;</div>
+        </a>
+        <a href="repayment-to-loan.html" class="tool-card" data-tool="repayment-to-loan">
+          <button class="star-btn" title="Add to favourites">&#9733;</button>
+          <div class="card-accent" style="background:var(--blue)"></div>
+          <div class="card-icon">🔢</div>
+          <div class="card-title">Repayment to Loan Size</div>
+          <div class="card-desc">Enter what you can afford to repay each week, fortnight, or month and find the maximum loan you could service.</div>
+          <div class="card-arrow">&#8594;</div>
+        </a>
+        <a href="property-cashflow.html" class="tool-card" data-tool="property-cashflow">
+          <button class="star-btn" title="Add to favourites">&#9733;</button>
+          <div class="card-accent" style="background:var(--gold)"></div>
+          <div class="card-icon">🏘️</div>
+          <div class="card-title">Property Cash Flow</div>
+          <div class="card-desc">Analyse an investment property's pre and post-tax yield, negative gearing benefit, and net cash position.</div>
+          <div class="card-arrow">&#8594;</div>
+        </a>
+        <a href="stamp-duty.html" class="tool-card" data-tool="stamp-duty">
+          <button class="star-btn" title="Add to favourites">&#9733;</button>
+          <div class="card-accent" style="background:var(--red)"></div>
+          <div class="card-icon">📄</div>
+          <div class="card-title">Stamp Duty Calculator</div>
+          <div class="card-desc">Calculate stamp duty for any Australian state. Supports owner-occupier, investor, and first home buyer concessions.</div>
+          <div class="card-arrow">&#8594;</div>
+        </a>
+        <a href="rent-vs-buy.html" class="tool-card" data-tool="rent-vs-buy">
+          <button class="star-btn" title="Add to favourites">&#9733;</button>
+          <div class="card-accent" style="background:var(--green)"></div>
+          <div class="card-icon">🔑</div>
+          <div class="card-title">Rent vs. Buy</div>
+          <div class="card-desc">Find the break-even horizon where buying beats renting, accounting for stamp duty, opportunity cost, and growth.</div>
+          <div class="card-arrow">&#8594;</div>
+        </a>
+        <a href="borrowing-capacity.html" class="tool-card" data-tool="borrowing-capacity">
+          <button class="star-btn" title="Add to favourites">&#9733;</button>
+          <div class="card-accent" style="background:var(--muted)"></div>
+          <div class="card-icon">💳</div>
+          <div class="card-title">Borrowing Capacity</div>
+          <div class="card-desc">Estimate your maximum loan size based on income, expenses, and existing liabilities.</div>
+          <div class="card-arrow">&#8594;</div>
+        </a>
+      </div>
+    </div>
+    <div class="category">
+      <div class="category-title">Investing &amp; Wealth</div>
+      <div class="tool-grid">
+        <a href="offset-vs-invest.html" class="tool-card" data-tool="offset-vs-invest">
+          <button class="star-btn" title="Add to favourites">&#9733;</button>
+          <div class="card-accent" style="background:var(--blue)"></div>
+          <div class="card-icon">📊</div>
+          <div class="card-title">Offset vs. Invest</div>
+          <div class="card-desc">Should spare cash go into your offset or the market? Compare guaranteed tax-free returns against after-tax investment growth.</div>
+          <div class="card-arrow">&#8594;</div>
+        </a>
+        <a href="compound-growth.html" class="tool-card" data-tool="compound-growth">
+          <button class="star-btn" title="Add to favourites">&#9733;</button>
+          <div class="card-accent" style="background:var(--green)"></div>
+          <div class="card-icon">📈</div>
+          <div class="card-title">Compound Growth</div>
+          <div class="card-desc">Model lump sum and regular contributions compounding over time. Toggle super vs. non-super tax treatment.</div>
+          <div class="card-arrow">&#8594;</div>
+        </a>
+        <a href="net-worth.html" class="tool-card" data-tool="net-worth">
+          <button class="star-btn" title="Add to favourites">&#9733;</button>
+          <div class="card-accent" style="background:var(--purple)"></div>
+          <div class="card-icon">🧾</div>
+          <div class="card-title">Net Worth Tracker</div>
+          <div class="card-desc">Track assets and liabilities across home equity, super, investments, cash, and debt.</div>
+          <div class="card-arrow">&#8594;</div>
+        </a>
+      </div>
+    </div>
+    <div class="category">
+      <div class="category-title">Retirement &amp; Tax</div>
+      <div class="tool-grid">
+        <a href="fire-timeline.html" class="tool-card" data-tool="fire-timeline">
+          <button class="star-btn" title="Add to favourites">&#9733;</button>
+          <div class="card-accent" style="background:var(--gold)"></div>
+          <div class="card-icon">🔥</div>
+          <div class="card-title">FIRE Timeline</div>
+          <div class="card-desc">Calculate your path to financial independence. Enter savings rate, net worth, and target annual spend to find your FI date.</div>
+          <div class="card-arrow">&#8594;</div>
+        </a>
+        <a href="salary-tax.html" class="tool-card" data-tool="salary-tax">
+          <button class="star-btn" title="Add to favourites">&#9733;</button>
+          <div class="card-accent" style="background:var(--red)"></div>
+          <div class="card-icon">💼</div>
+          <div class="card-title">Salary &amp; Tax Optimiser</div>
+          <div class="card-desc">Model take-home pay under different super contributions and salary sacrifice. Includes Medicare levy and offsets.</div>
+          <div class="card-arrow">&#8594;</div>
+        </a>
+      </div>
     </div>
   </div>
 
-  <div class="category">
-    <div class="category-title">Investing &amp; Wealth</div>
-    <div class="tool-grid">
-      <a href="offset-vs-invest.html" class="tool-card">
-        <div class="card-accent" style="background:var(--blue)"></div>
-        <div class="card-icon">📊</div>
-        <div class="card-title">Offset vs. Invest</div>
-        <div class="card-desc">Should spare cash go into your offset or the market? Compare guaranteed tax-free returns against after-tax investment growth.</div>
-        <div class="card-arrow">&#8594;</div>
-      </a>
-      <a href="compound-growth.html" class="tool-card">
-        <div class="card-accent" style="background:var(--green)"></div>
-        <div class="card-icon">📈</div>
-        <div class="card-title">Compound Growth</div>
-        <div class="card-desc">Model lump sum and regular contributions compounding over time. Toggle super vs. non-super tax treatment.</div>
-        <div class="card-arrow">&#8594;</div>
-      </a>
-      <a href="net-worth.html" class="tool-card">
-        <div class="card-accent" style="background:var(--purple)"></div>
-        <div class="card-icon">🧾</div>
-        <div class="card-title">Net Worth Tracker</div>
-        <div class="card-desc">Track assets and liabilities across home equity, super, investments, cash, and debt. Saved to your browser.</div>
-        <div class="card-arrow">&#8594;</div>
-      </a>
-    </div>
-  </div>
-
-  <div class="category">
-    <div class="category-title">Retirement &amp; Tax</div>
-    <div class="tool-grid">
-      <a href="fire-timeline.html" class="tool-card">
-        <div class="card-accent" style="background:var(--gold)"></div>
-        <div class="card-icon">🔥</div>
-        <div class="card-title">FIRE Timeline</div>
-        <div class="card-desc">Calculate your path to financial independence. Enter savings rate, net worth, and target annual spend to find your FI date.</div>
-        <div class="card-arrow">&#8594;</div>
-      </a>
-      <a href="salary-tax.html" class="tool-card">
-        <div class="card-accent" style="background:var(--red)"></div>
-        <div class="card-icon">💼</div>
-        <div class="card-title">Salary &amp; Tax Optimiser</div>
-        <div class="card-desc">Model take-home pay under different super contributions and salary sacrifice. Includes Medicare levy and offsets.</div>
-        <div class="card-arrow">&#8594;</div>
-      </a>
+  <!-- Favourites tab -->
+  <div id="view-fav" style="display:none">
+    <div class="tool-grid" id="fav-grid"></div>
+    <div class="empty-state" id="fav-empty" style="display:none">
+      <div class="empty-icon">&#9733;</div>
+      <h3>No favourites yet</h3>
+      <p>Tap the star on any tool to save it here for quick access.</p>
     </div>
   </div>
 
@@ -143,6 +195,110 @@
     Open source &middot; <a href="https://github.com/bstillitano/finance-toolkit">GitHub</a> &middot; Not financial advice
   </site-footer>
 </div>
-<script>FinanceNav.init();</script>
+<script>
+var FAV_KEY = 'finance-toolkit-favourites';
+
+function getFavs() {
+  try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch(e) { return []; }
+}
+function setFavs(keys) {
+  localStorage.setItem(FAV_KEY, JSON.stringify(keys));
+  if (window.CloudSync) CloudSync.save('favourites', { keys: keys });
+}
+function toggleFav(toolKey) {
+  var keys = getFavs();
+  var idx = keys.indexOf(toolKey);
+  if (idx === -1) keys.push(toolKey); else keys.splice(idx, 1);
+  setFavs(keys);
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+var activeTab = 'all';
+function showTab(tab) {
+  activeTab = tab;
+  document.getElementById('view-all').style.display = tab === 'all' ? '' : 'none';
+  document.getElementById('view-fav').style.display = tab === 'fav' ? '' : 'none';
+  document.getElementById('tab-all').classList.toggle('active', tab === 'all');
+  document.getElementById('tab-fav').classList.toggle('active', tab === 'fav');
+  if (tab === 'fav') renderFavGrid();
+}
+document.getElementById('tab-all').addEventListener('click', function() { showTab('all'); });
+document.getElementById('tab-fav').addEventListener('click', function() { showTab('fav'); });
+
+// ── Stars ─────────────────────────────────────────────────────────────────────
+function updateStars() {
+  var favs = getFavs();
+  document.querySelectorAll('#view-all .tool-card').forEach(function(card) {
+    var btn = card.querySelector('.star-btn');
+    if (!btn) return;
+    var starred = favs.indexOf(card.dataset.tool) !== -1;
+    btn.classList.toggle('starred', starred);
+    btn.title = starred ? 'Remove from favourites' : 'Add to favourites';
+  });
+  var badge = document.getElementById('fav-badge');
+  var count = favs.length;
+  badge.textContent = count || '';
+  badge.classList.toggle('show', count > 0);
+}
+
+document.querySelectorAll('#view-all .star-btn').forEach(function(btn) {
+  btn.addEventListener('click', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleFav(btn.closest('.tool-card').dataset.tool);
+    updateStars();
+    if (activeTab === 'fav') renderFavGrid();
+  });
+});
+
+// ── Favourites grid ───────────────────────────────────────────────────────────
+function renderFavGrid() {
+  var favs = getFavs();
+  var grid  = document.getElementById('fav-grid');
+  var empty = document.getElementById('fav-empty');
+  grid.innerHTML = '';
+  if (favs.length === 0) {
+    empty.style.display = 'flex';
+    return;
+  }
+  empty.style.display = 'none';
+  favs.forEach(function(toolKey) {
+    var original = document.querySelector('#view-all [data-tool="' + toolKey + '"]');
+    if (!original) return;
+    var clone = original.cloneNode(true);
+    var btn = clone.querySelector('.star-btn');
+    if (btn) {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleFav(toolKey);
+        updateStars();
+        renderFavGrid();
+      });
+    }
+    grid.appendChild(clone);
+  });
+  // Update star states on clones too
+  var favs2 = getFavs();
+  grid.querySelectorAll('.tool-card').forEach(function(card) {
+    var btn = card.querySelector('.star-btn');
+    if (!btn) return;
+    var starred = favs2.indexOf(card.dataset.tool) !== -1;
+    btn.classList.toggle('starred', starred);
+  });
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+FinanceNav.init({
+  onFavouritesLoad: function(keys) {
+    updateStars();
+    if (activeTab === 'fav') renderFavGrid();
+  }
+});
+
+var hasFavs = getFavs().length > 0;
+showTab(hasFavs ? 'fav' : 'all');
+updateStars();
+</script>
 </body>
 </html>

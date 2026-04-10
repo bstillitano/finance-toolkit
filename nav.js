@@ -344,6 +344,32 @@
     });
   }
 
+  // ─── favourites sync ───────────────────────────────────────────────────────
+  var FAV_KEY = 'finance-toolkit-favourites';
+
+  window.FavouritesSync = {
+    get: function () {
+      try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch(e) { return []; }
+    },
+    set: function (keys) {
+      localStorage.setItem(FAV_KEY, JSON.stringify(keys));
+      if (window.CloudSync && sb && currentUser) {
+        CloudSync.save('favourites', { keys: keys });
+      }
+    },
+    toggle: function (toolKey) {
+      var keys = this.get();
+      var idx = keys.indexOf(toolKey);
+      if (idx === -1) keys.push(toolKey);
+      else keys.splice(idx, 1);
+      this.set(keys);
+      return keys;
+    },
+    isFavourite: function (toolKey) {
+      return this.get().indexOf(toolKey) !== -1;
+    },
+  };
+
   // ─── public API ────────────────────────────────────────────────────────────
   window.FinanceNav = {
     init: async function (opts) {
@@ -363,6 +389,15 @@
             window.CloudSync.load(opts.cloudKey).then(function (data) {
               if (data) opts.onCloudLoad(data);
             }).catch(function (e) { console.warn('Cloud load failed:', e); });
+          }
+          // Load cloud favourites if handler provided
+          if (opts.onFavouritesLoad) {
+            window.CloudSync.load('favourites').then(function (data) {
+              if (data && Array.isArray(data.keys)) {
+                localStorage.setItem(FAV_KEY, JSON.stringify(data.keys));
+                opts.onFavouritesLoad(data.keys);
+              }
+            }).catch(function (e) { console.warn('Favourites cloud load failed:', e); });
           }
         }
 
