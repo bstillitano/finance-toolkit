@@ -30,7 +30,6 @@
       <div class="input-group"><label>Annual Income</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="income" value="120000" step="5000"></div></div>
       <div class="input-group"><label>Annual Spend</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="spend" value="70000" step="5000"></div></div>
       <div class="input-group"><label>Current Age</label><div class="input-wrap"><span class="pfx">yr</span><input type="number" id="age" value="32" step="1" min="18" max="80"></div></div>
-      <div class="input-group"><label>Current Year</label><div class="input-wrap"><span class="pfx">#</span><input type="number" id="startYear" value="2026" step="1" min="2000" max="2100"></div></div>
     </div>
     <div class="sep"></div>
     <div class="section-title">Assumptions</div>
@@ -56,8 +55,8 @@
 
 <script>
 const STORAGE_KEY = 'fire-timeline-v1';
-const IDS = ['netWorth','income','spend','age','growthRate','retireRate','withdrawRate','inflation','startYear'];
-const DEFAULTS = { netWorth:200000, income:120000, spend:70000, age:32, growthRate:8, retireRate:6, withdrawRate:4, inflation:3, startYear:2026 };
+const IDS = ['netWorth','income','spend','age','growthRate','retireRate','withdrawRate','inflation'];
+const DEFAULTS = { netWorth:200000, income:120000, spend:70000, age:32, growthRate:8, retireRate:6, withdrawRate:4, inflation:3 };
 
 let saveTimer = null;
 function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
@@ -81,7 +80,7 @@ function render() {
   const savingsRate = income > 0 ? (annualSavings / income * 100) : 0;
 
   // Year-by-year accumulation
-  const sy = parseInt(document.getElementById('startYear')?.value) || 2026;
+  const sy = new Date().getFullYear();
   const years = [], worths = [], targets = [];
   let bal = nw, target = fiTarget, fireYear = null;
 
