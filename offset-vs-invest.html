@@ -28,6 +28,8 @@
     <div class="input-grid">
       <div class="input-group"><label>Mortgage Rate (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="mortgageRate" value="6.00" step="0.05"></div></div>
       <div class="input-group"><label>Marginal Tax Rate (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="taxRate" value="37" step="1"></div></div>
+      <div class="input-group"><label>Loan Balance <span style="font-weight:400;color:var(--subtle)">(optional)</span></label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="loanBal" value="" step="10000" placeholder="e.g. 500000"></div></div>
+      <div class="input-group"><label>Current Offset Balance <span style="font-weight:400;color:var(--subtle)">(optional)</span></label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="currentOffset" value="" step="5000" placeholder="e.g. 80000"></div></div>
     </div>
     <div class="sep"></div>
     <div class="section-title">Investment Assumptions</div>
@@ -40,6 +42,8 @@
   </div>
 
   <div class="stats" id="statsRow"></div>
+
+  <div id="overfundingWarning" style="display:none" class="callout gold" style="margin-bottom:20px"></div>
 
   <div class="chart-wrap"><canvas id="myChart" height="280"></canvas></div>
 
@@ -54,8 +58,8 @@
 
 <script>
 const STORAGE_KEY = 'offset-vs-invest-v1';
-const DEFAULTS = { mortgageRate: 6.00, taxRate: 37, investReturn: 9.00, investType: 'growth', amount: 50000, years: 10 };
-const IDS = ['mortgageRate','taxRate','investReturn','investType','amount','years'];
+const DEFAULTS = { mortgageRate: 6.00, taxRate: 37, investReturn: 9.00, investType: 'growth', amount: 50000, years: 10, loanBal: '', currentOffset: '' };
+const IDS = ['mortgageRate','taxRate','investReturn','investType','amount','years','loanBal','currentOffset'];
 
 let saveTimer = null;
 function flashSaved() {
@@ -101,9 +105,30 @@ function render() {
   const type = gs('investType');
   const amount = g('amount');
   const years = Math.round(g('years'));
+  const loanBal      = g('loanBal');
+  const currentOffset = g('currentOffset');
+
+  // Overfunding check — if offset + amount > loan, part earns nothing
+  const warningEl = document.getElementById('overfundingWarning');
+  if (loanBal > 0 && (currentOffset + amount) > loanBal) {
+    const usefulAmount = Math.max(0, loanBal - currentOffset);
+    const wastedAmount = amount - usefulAmount;
+    const pctWasted = ((wastedAmount / amount) * 100).toFixed(0);
+    warningEl.style.display = '';
+    warningEl.innerHTML = '<div class="callout-title" style="color:var(--gold)">&#9888; Offset overfunding detected</div>' +
+      '<div class="callout-sub" style="color:var(--text);margin-top:4px">Your current offset ($' + currentOffset.toLocaleString() + ') + this deployment ($' + amount.toLocaleString() + ') exceeds your loan balance ($' + loanBal.toLocaleString() + '). ' +
+      '$' + wastedAmount.toLocaleString() + ' (' + pctWasted + '%) would sit in the offset earning nothing. ' +
+      'Only $' + usefulAmount.toLocaleString() + ' of this amount would reduce your interest — the rest is better deployed elsewhere.</div>';
+  } else {
+    warningEl.style.display = 'none';
+  }
 
   // Offset: guaranteed after-tax return = mortgage rate (already tax-free)
-  const offsetRate = mr;
+  // If overfunded, the effective rate on the full amount is reduced
+  const effectiveAmount = loanBal > 0 ? Math.min(amount, Math.max(0, loanBal - currentOffset)) : amount;
+  const offsetRate = loanBal > 0 && effectiveAmount < amount
+    ? mr * (effectiveAmount / amount)  // blended rate accounting for wasted portion
+    : mr;
 
   // Invest: after-tax return
   const investRate = calcAfterTaxReturn(ir * 100, g('taxRate'), type) / 100;
