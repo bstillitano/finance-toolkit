@@ -211,4 +211,6 @@ tr.positive td { color: var(--green); }
 .auth-btn-secondary:hover:not(:disabled) { border-color: var(--subtle); color: var(--text); }
 .auth-btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.footer a { color: var(--text); }
+.footer a { color: var(--text); text-decoration: underline; }
+.footer a:visited { color: var(--text); }
+.footer a:hover { color: #fff; }
