@@ -58,161 +58,168 @@
 
   <p class="footer">All data is stored locally in your browser and never sent to any server.</p>
 </div>
-
 <script>
 const STORAGE_KEY = 'net-worth-v1';
 
 const DEFAULT_ASSETS = [
   { id: 1, label: 'Primary Home (equity)', value: 400000 },
-  { id: 2, label: 'Super', value: 120000 },
-  { id: 3, label: 'Share Portfolio', value: 50000 },
-  { id: 4, label: 'Offset / Cash', value: 80000 },
+  { id: 2, label: 'Super',                 value: 120000 },
+  { id: 3, label: 'Share Portfolio',        value: 50000  },
+  { id: 4, label: 'Offset / Cash',          value: 80000  },
   { id: 5, label: 'Investment Property (equity)', value: 150000 },
 ];
 const DEFAULT_LIABILITIES = [
-  { id: 1, label: 'Home Mortgage', value: 600000 },
-  { id: 2, label: 'Investment Loan', value: 400000 },
-  { id: 3, label: 'Car Loan', value: 0 },
-  { id: 4, label: 'Credit Cards', value: 0 },
+  { id: 1, label: 'Home Mortgage',    value: 600000 },
+  { id: 2, label: 'Investment Loan',  value: 400000 },
+  { id: 3, label: 'Car Loan',         value: 0      },
+  { id: 4, label: 'Credit Cards',     value: 0      },
 ];
 
-let assets, liabilities, nextAId, nextLId;
-let donutChart = null, barChart = null;
-let saveTimer = null;
+var assets, liabilities, nextAId, nextLId;
+var donutChart = null, barChart = null;
+var saveTimer = null;
 
-function flashSaved() { const el = document.getElementById('saveInd'); if (!el) return; el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
+function flashSaved() {
+  var el = document.getElementById('saveInd');
+  if (!el) return;
+  el.classList.add('show');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(function() { el.classList.remove('show'); }, 1800);
+}
 
 function saveState() {
-  try {
-    const _nwState = { assets, liabilities, nextAId, nextLId };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(_nwState));
-    if (window.CloudSync) { CloudSync.save('net-worth', _nwState); localStorage.setItem('net-worth_updated_at', Date.now().toString()); }
-    flashSaved();
-  } catch(e) { console.warn('saveState failed:', e); }
+  var state = { assets: assets, liabilities: liabilities, nextAId: nextAId, nextLId: nextLId };
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {}
+  if (window.CloudSync) {
+    CloudSync.save('net-worth', state);
+    try { localStorage.setItem('net-worth_updated_at', Date.now().toString()); } catch(e) {}
+  }
+  flashSaved();
 }
 
 function loadState() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; }
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch(e) { return null; }
 }
 
 function renderList(containerId, items, type) {
-  const container = document.getElementById(containerId);
-  container.innerHTML = items.map((item, idx) => `
-    <div class="line-item">
-      <label><input type="text" class="item-label" value="${item.label}" placeholder="Label" style="padding-left:8px;font-family:'DM Sans',sans-serif;font-size:12px" data-idx="${idx}" data-type="${type}"></label>
-      <div class="input-wrap" style="flex:0 0 130px">
-        <span class="pfx">$</span>
-        <input type="number" class="item-value" value="${item.value}" step="1000" data-idx="${idx}" data-type="${type}">
-      </div>
-      ${items.length > 1 ? `<button class="remove-btn" data-idx="${idx}" data-type="${type}">&times;</button>` : ''}
-    </div>
-  `).join('');
+  var container = document.getElementById(containerId);
+  container.innerHTML = items.map(function(item, idx) {
+    return '<div class="line-item">' +
+      '<label><input type="text" class="item-label" value="' + item.label.replace(/"/g, '&quot;') + '" placeholder="Label" style="padding-left:8px;font-family:\'DM Sans\',sans-serif;font-size:12px" data-idx="' + idx + '" data-type="' + type + '"></label>' +
+      '<div class="input-wrap" style="flex:0 0 130px"><span class="pfx">$</span>' +
+      '<input type="number" class="item-value" value="' + item.value + '" step="1000" data-idx="' + idx + '" data-type="' + type + '"></div>' +
+      (items.length > 1 ? '<button class="remove-btn" data-idx="' + idx + '" data-type="' + type + '">&times;</button>' : '') +
+      '</div>';
+  }).join('');
 
-  container.querySelectorAll('.item-label').forEach(el => el.addEventListener('input', e => {
-    const { idx, type: t } = e.target.dataset;
-    (t === 'asset' ? assets : liabilities)[idx].label = e.target.value;
-    saveState(); renderChart();
-  }));
-  container.querySelectorAll('.item-value').forEach(el => el.addEventListener('input', e => {
-    const { idx, type: t } = e.target.dataset;
-    (t === 'asset' ? assets : liabilities)[idx].value = +e.target.value || 0;
-    saveState(); renderChart();
-  }));
-  container.querySelectorAll('.remove-btn').forEach(el => el.addEventListener('click', e => {
-    try {
-      const { idx, type: t } = e.target.dataset;
-      if (t === 'asset') assets.splice(+idx, 1);
-      else liabilities.splice(+idx, 1);
-      saveState(); renderList(containerId, t === 'asset' ? assets : liabilities, t); renderChart();
-    } catch(e) { console.error('removeItem failed:', e); }
-  }));
+  container.querySelectorAll('.item-label').forEach(function(el) {
+    el.addEventListener('input', function(e) {
+      var idx = +e.target.dataset.idx;
+      var t   = e.target.dataset.type;
+      (t === 'asset' ? assets : liabilities)[idx].label = e.target.value;
+      saveState(); renderChart();
+    });
+  });
+  container.querySelectorAll('.item-value').forEach(function(el) {
+    el.addEventListener('input', function(e) {
+      var idx = +e.target.dataset.idx;
+      var t   = e.target.dataset.type;
+      (t === 'asset' ? assets : liabilities)[idx].value = +e.target.value || 0;
+      saveState(); renderChart();
+    });
+  });
+  container.querySelectorAll('.remove-btn').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      var idx = +e.target.dataset.idx;
+      var t   = e.target.dataset.type;
+      if (t === 'asset') assets.splice(idx, 1);
+      else liabilities.splice(idx, 1);
+      saveState();
+      renderList(containerId, t === 'asset' ? assets : liabilities, t);
+      renderChart();
+    });
+  });
 }
 
 function renderChart() {
-  const totalAssets = assets.reduce((s, a) => s + (a.value || 0), 0);
-  const totalLiab = liabilities.reduce((s, l) => s + (l.value || 0), 0);
-  const netWorth = totalAssets - totalLiab;
+  var totalAssets = assets.reduce(function(s, a) { return s + (a.value || 0); }, 0);
+  var totalLiab   = liabilities.reduce(function(s, l) { return s + (l.value || 0); }, 0);
+  var netWorth    = totalAssets - totalLiab;
+  var dtar        = totalAssets > 0 ? ((totalLiab / totalAssets) * 100).toFixed(1) : '0';
+  var dtarColor   = totalLiab/totalAssets < 0.5 ? 'var(--green)' : totalLiab/totalAssets < 0.8 ? 'var(--gold)' : 'var(--red)';
+  var nwColor     = netWorth >= 0 ? 'var(--blue)' : 'var(--red)';
 
-  document.getElementById('statsRow').innerHTML = `
-    <div class="stat-card" style="border-top-color:var(--green)">
-      <div class="stat-label">Total Assets</div>
-      <div class="stat-value" style="color:var(--green)">$${totalAssets.toLocaleString()}</div>
-    </div>
-    <div class="stat-card" style="border-top-color:var(--red)">
-      <div class="stat-label">Total Liabilities</div>
-      <div class="stat-value" style="color:var(--red)">$${totalLiab.toLocaleString()}</div>
-    </div>
-    <div class="stat-card" style="border-top-color:${netWorth>=0?'var(--blue)':'var(--red)'}">
-      <div class="stat-label">Net Worth</div>
-      <div class="stat-value" style="color:${netWorth>=0?'var(--blue)':'var(--red)'}">$${netWorth.toLocaleString()}</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Debt-to-Asset Ratio</div>
-      <div class="stat-value" style="color:${totalLiab/totalAssets<0.5?'var(--green)':totalLiab/totalAssets<0.8?'var(--gold)':'var(--red)'}">${totalAssets > 0 ? ((totalLiab/totalAssets)*100).toFixed(1) : '0'}%</div>
-    </div>`;
+  document.getElementById('statsRow').innerHTML =
+    '<div class="stat-card" style="border-top-color:var(--green)"><div class="stat-label">Total Assets</div><div class="stat-value" style="color:var(--green)">$' + totalAssets.toLocaleString() + '</div></div>' +
+    '<div class="stat-card" style="border-top-color:var(--red)"><div class="stat-label">Total Liabilities</div><div class="stat-value" style="color:var(--red)">$' + totalLiab.toLocaleString() + '</div></div>' +
+    '<div class="stat-card" style="border-top-color:' + nwColor + '"><div class="stat-label">Net Worth</div><div class="stat-value" style="color:' + nwColor + '">$' + netWorth.toLocaleString() + '</div></div>' +
+    '<div class="stat-card"><div class="stat-label">Debt-to-Asset Ratio</div><div class="stat-value" style="color:' + dtarColor + '">' + dtar + '%</div></div>';
 
-  // Donut: asset breakdown
+  var assetColors = ['#58a6ff','#3fb950','#e3b341','#bc8cff','#f78166','#79c0ff','#56d364','#ffa657'];
   if (donutChart) donutChart.destroy();
-  const assetColors = ['#58a6ff','#3fb950','#e3b341','#bc8cff','#f78166','#79c0ff','#56d364','#ffa657'];
   donutChart = new Chart(document.getElementById('donutChart'), {
     type: 'doughnut',
-    data: { labels: assets.map(a => a.label), datasets: [{ data: assets.map(a => a.value), backgroundColor: assetColors.slice(0, assets.length), borderWidth: 0, hoverOffset: 4 }] },
-    options: { responsive: true, animation: false, cutout: '60%', plugins: { legend: { position: 'bottom', labels: { color: '#7d8590', font: { family: 'DM Sans', size: 11 }, padding: 10 } }, tooltip: { backgroundColor: '#0d1117', borderColor: '#21262d', borderWidth: 1, callbacks: { label: c => ' ' + c.label + ': $' + c.parsed.toLocaleString() } } }, title: { display: true, text: 'Asset Breakdown', color: '#7d8590', font: { family: 'DM Sans', size: 12 }, padding: { bottom: 12 } } }
-    }
+    data: { labels: assets.map(function(a) { return a.label; }), datasets: [{ data: assets.map(function(a) { return a.value; }), backgroundColor: assetColors.slice(0, assets.length), borderWidth: 0, hoverOffset: 4 }] },
+    options: { responsive: true, animation: false, cutout: '60%', plugins: { legend: { position: 'bottom', labels: { color: '#7d8590', font: { family: 'DM Sans', size: 11 }, padding: 10 } }, tooltip: { backgroundColor: '#0d1117', borderColor: '#21262d', borderWidth: 1, callbacks: { label: function(c) { return ' ' + c.label + ': $' + c.parsed.toLocaleString(); } } } } }
   });
 
-  // Bar: assets vs liabilities
   if (barChart) barChart.destroy();
   barChart = new Chart(document.getElementById('barChart'), {
     type: 'bar',
     data: { labels: ['Assets', 'Liabilities', 'Net Worth'], datasets: [{ data: [totalAssets, totalLiab, Math.max(netWorth, 0)], backgroundColor: ['#3fb950', '#f78166', '#58a6ff'], borderWidth: 0, borderRadius: 4 }] },
-    options: { responsive: true, animation: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#0d1117', borderColor: '#21262d', borderWidth: 1, callbacks: { label: c => ' $' + c.parsed.y.toLocaleString() } }, title: { display: true, text: 'Summary', color: '#7d8590', font: { family: 'DM Sans', size: 12 }, padding: { bottom: 12 } } }, scales: { x: { ticks: { color: '#7d8590', font: { family: 'DM Sans', size: 12 } }, grid: { display: false } }, y: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 }, callback: v => '$' + (v>=1e6?(v/1e6).toFixed(1)+'M':(v/1000).toFixed(0)+'k') }, grid: { color: '#21262d' } } } }
-    }
+    options: { responsive: true, animation: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#0d1117', borderColor: '#21262d', borderWidth: 1, callbacks: { label: function(c) { return ' $' + c.parsed.y.toLocaleString(); } } } }, scales: { x: { ticks: { color: '#7d8590', font: { family: 'DM Sans', size: 12 } }, grid: { display: false } }, y: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 }, callback: function(v) { return '$' + (v >= 1e6 ? (v/1e6).toFixed(1) + 'M' : (v/1000).toFixed(0) + 'k'); } }, grid: { color: '#21262d' } } } }
   });
 }
 
-function applyCloudState(d) {
-  assets      = d.assets      || [];
-  liabilities = d.liabilities || [];
-  nextAId     = d.nextAId     ?? (assets.length     ? Math.max(...assets.map(a => a.id))      + 1 : 1);
-  nextLId     = d.nextLId     ?? (liabilities.length ? Math.max(...liabilities.map(l => l.id)) + 1 : 1);
+function applyState(s) {
+  assets      = s.assets      || JSON.parse(JSON.stringify(DEFAULT_ASSETS));
+  liabilities = s.liabilities || JSON.parse(JSON.stringify(DEFAULT_LIABILITIES));
+  nextAId     = s.nextAId     || (Math.max.apply(null, assets.map(function(a) { return a.id; })) + 1);
+  nextLId     = s.nextLId     || (Math.max.apply(null, liabilities.map(function(l) { return l.id; })) + 1);
+}
+
+function init() {
   renderList('assetList',     assets,      'asset');
   renderList('liabilityList', liabilities, 'liability');
   renderChart();
 }
 
-function init() {
+// ── button handlers ──────────────────────────────────────────────────────────
+document.getElementById('addAssetBtn').addEventListener('click', function() {
+  assets.push({ id: nextAId++, label: 'Asset', value: 0 });
+  saveState();
   renderList('assetList', assets, 'asset');
+  renderChart();
+});
+
+document.getElementById('addLiabilityBtn').addEventListener('click', function() {
+  liabilities.push({ id: nextLId++, label: 'Liability', value: 0 });
+  saveState();
   renderList('liabilityList', liabilities, 'liability');
   renderChart();
-}
+});
 
-document.getElementById('addAssetBtn').addEventListener('click', () => {
-  try {
-    assets.push({ id: nextAId++, label: 'Asset', value: 0 });
-    saveState(); renderList('assetList', assets, 'asset'); renderChart();
-  } catch(e) { console.error('addAsset failed:', e); }
-});
-document.getElementById('addLiabilityBtn').addEventListener('click', () => {
-  try {
-    liabilities.push({ id: nextLId++, label: 'Liability', value: 0 });
-    saveState(); renderList('liabilityList', liabilities, 'liability'); renderChart();
-  } catch(e) { console.error('addLiability failed:', e); }
-});
-document.getElementById('resetBtn').addEventListener('click', () => {
+document.getElementById('resetBtn').addEventListener('click', function() {
   if (!confirm('Reset to defaults?')) return;
   localStorage.removeItem(STORAGE_KEY);
-  assets = JSON.parse(JSON.stringify(DEFAULT_ASSETS));
-  liabilities = JSON.parse(JSON.stringify(DEFAULT_LIABILITIES));
-  nextAId = DEFAULT_ASSETS.length + 1; nextLId = DEFAULT_LIABILITIES.length + 1;
+  applyState({});
   init();
 });
 
-const saved = loadState();
-if (saved) { assets = saved.assets; liabilities = saved.liabilities; nextAId = saved.nextAId; nextLId = saved.nextLId; }
-else { assets = JSON.parse(JSON.stringify(DEFAULT_ASSETS)); liabilities = JSON.parse(JSON.stringify(DEFAULT_LIABILITIES)); nextAId = DEFAULT_ASSETS.length + 1; nextLId = DEFAULT_LIABILITIES.length + 1; }
+// ── init ─────────────────────────────────────────────────────────────────────
+var saved = loadState();
+applyState(saved || {});
 init();
+
+// ── auth + cloud ──────────────────────────────────────────────────────────────
+FinanceNav.init({
+  toolName: 'Net Worth Tracker',
+  cloudKey: 'net-worth',
+  onCloudLoad: function(d) {
+    applyState(d);
+    init();
+  }
+});
 </script>
-<script>FinanceNav.init({ toolName: 'Net Worth Tracker', cloudKey: 'net-worth' , onCloudLoad: function(d) { applyCloudState(d); } });</script>
 </body>
 </html>
