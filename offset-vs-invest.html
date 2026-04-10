@@ -31,6 +31,7 @@
       <div class="input-group"><label>Loan Balance <span style="font-weight:400;color:var(--subtle)">(optional)</span></label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="loanBal" value="" step="10000" placeholder="e.g. 500000"></div></div>
       <div class="input-group"><label>Current Offset Balance <span style="font-weight:400;color:var(--subtle)">(optional)</span></label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="currentOffset" value="" step="5000" placeholder="e.g. 80000"></div></div>
       <div class="input-group"><label>Remaining Loan Term (years) <span style="font-weight:400;color:var(--subtle)">(optional)</span></label><div class="input-wrap"><span class="pfx">yr</span><input type="number" id="loanTerm" value="" step="1" min="1" max="40" placeholder="e.g. 25"></div></div>
+      <div class="input-group"><label>Weekly Repayment <span style="font-weight:400;color:var(--subtle)">(optional)</span></label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="weeklyRepay" value="" step="50" placeholder="e.g. 1200"></div></div>
     </div>
     <div class="sep"></div>
     <div class="section-title">Investment Assumptions</div>
@@ -59,8 +60,8 @@
 
 <script>
 const STORAGE_KEY = 'offset-vs-invest-v1';
-const DEFAULTS = { mortgageRate: 6.00, taxRate: 37, investReturn: 9.00, investType: 'growth', amount: 50000, years: 10, loanBal: '', currentOffset: '', loanTerm: '' };
-const IDS = ['mortgageRate','taxRate','investReturn','investType','amount','years','loanBal','currentOffset','loanTerm'];
+const DEFAULTS = { mortgageRate: 6.00, taxRate: 37, investReturn: 9.00, investType: 'growth', amount: 50000, years: 10, loanBal: '', currentOffset: '', loanTerm: '', weeklyRepay: '' };
+const IDS = ['mortgageRate','taxRate','investReturn','investType','amount','years','loanBal','currentOffset','loanTerm','weeklyRepay'];
 
 let saveTimer = null;
 function flashSaved() {
@@ -134,25 +135,76 @@ function render() {
   // Invest: after-tax return
   const investRate = calcAfterTaxReturn(ir * 100, g('taxRate'), type) / 100;
 
-  const loanTerm = g('loanTerm');
+  const loanBal2    = g('loanBal');
+  const curOffset   = g('currentOffset');
+  const loanTerm    = g('loanTerm');
+  const weeklyRepay = g('weeklyRepay');
+  const rm          = mr / 12;
+  const monthlyRepay = weeklyRepay ? weeklyRepay * 52 / 12 : null;
+  const horizonMonths = years * 12;
 
-  // Year-by-year values — two-phase offset model
-  // Phase 1 (during loan): offset earns mortgage rate
-  // Phase 2 (post loan payoff): freed capital earns investment rate
-  const offsetValues = [], investValues = [];
-  for (let y = 0; y <= years; y++) {
-    let offsetVal;
-    if (!loanTerm || y <= loanTerm) {
-      // Still within loan term — offset saving mortgage interest
-      offsetVal = Math.round(amount * Math.pow(1 + offsetRate, y));
-    } else {
-      // Loan paid off — capital freed, now invested at after-tax return
-      const valueAtPayoff = amount * Math.pow(1 + offsetRate, loanTerm);
-      const yearsPostPayoff = y - loanTerm;
-      offsetVal = Math.round(valueAtPayoff * Math.pow(1 + investRate, yearsPostPayoff));
+  // ── Offset scenario: amortisation-aware ────────────────────────────────────
+  // Accumulate interest savings each month, then compound at mortgage rate.
+  // After loan is paid off, the accumulated pot grows at after-tax invest rate.
+  //
+  // If loan details not provided, fall back to simple perpetual-rate model.
+  const useAmortisation = loanBal2 > 0 && monthlyRepay;
+
+  const offsetValues = [amount]; // year 0 = starting value
+  const investValues = [amount];
+
+  if (useAmortisation) {
+    let loanRemaining = loanBal2;
+    let offsetUseful  = Math.min(amount, Math.max(0, loanBal2 - curOffset));
+    let savingsPot    = 0; // accumulated interest savings, growing at mortgage rate
+    let loanPaidOffMonth = null;
+
+    for (let m = 1; m <= horizonMonths; m++) {
+      if (loanRemaining > 0) {
+        // Interest saved this month = what we'd have paid on the offset portion
+        const effectiveOffset = Math.min(offsetUseful, loanRemaining);
+        const interestSaved   = effectiveOffset * rm;
+
+        // Reinvest that saving into the pot at the mortgage rate
+        savingsPot = savingsPot * (1 + rm) + interestSaved;
+
+        // Amortise the loan
+        const interest   = loanRemaining * rm;
+        const principal  = monthlyRepay ? Math.min(monthlyRepay - interest, loanRemaining) : 0;
+        loanRemaining    = Math.max(loanRemaining - principal, 0);
+
+        if (loanRemaining <= 0 && loanPaidOffMonth === null) {
+          loanPaidOffMonth = m;
+        }
+      } else {
+        // Loan paid off — savings pot + original amount now grows at invest rate
+        savingsPot    = savingsPot    * (1 + investRate / 12);
+      }
+
+      if (m % 12 === 0) {
+        // Total offset "value" = original amount (no longer in offset but freed) + savings accumulated
+        const yr = m / 12;
+        const originalFreed = loanPaidOffMonth && m > loanPaidOffMonth
+          ? amount * Math.pow(1 + investRate / 12, m - loanPaidOffMonth)
+          : amount; // still in offset, notional value unchanged
+        offsetValues.push(Math.round(originalFreed + savingsPot));
+        investValues.push(Math.round(amount * Math.pow(1 + investRate, yr)));
+      }
     }
-    offsetValues.push(offsetVal);
-    investValues.push(Math.round(amount * Math.pow(1 + investRate, y)));
+  } else {
+    // Simple model — no amortisation data provided
+    for (let y = 1; y <= years; y++) {
+      let offsetVal;
+      if (!loanTerm || y <= loanTerm) {
+        offsetVal = Math.round(amount * Math.pow(1 + offsetRate, y));
+      } else {
+        const valueAtPayoff  = amount * Math.pow(1 + offsetRate, loanTerm);
+        const yearsPost      = y - loanTerm;
+        offsetVal = Math.round(valueAtPayoff * Math.pow(1 + investRate, yearsPost));
+      }
+      offsetValues.push(offsetVal);
+      investValues.push(Math.round(amount * Math.pow(1 + investRate, y)));
+    }
   }
 
   const offsetFinal = offsetValues[years];
@@ -174,7 +226,7 @@ function render() {
     <div class="stat-card" style="border-top-color:var(--blue)">
       <div class="stat-label">Offset effective return</div>
       <div class="stat-value" style="color:var(--blue)">${(offsetRate*100).toFixed(2)}% tax-free</div>
-      <div class="stat-sub">${loanTerm ? 'During loan, then invested at ' + (investRate*100).toFixed(2) + '%' : 'Equiv. taxable: ' + taxFreeEquiv.toFixed(2) + '%'}</div>
+      <div class="stat-sub">${useAmortisation ? 'Amortisation-aware model' : loanTerm ? 'During loan then invested at ' + (investRate*100).toFixed(2) + '%' : 'Equiv. taxable: ' + taxFreeEquiv.toFixed(2) + '%'}</div>
     </div>
     <div class="stat-card" style="border-top-color:var(--green)">
       <div class="stat-label">Investment after-tax return</div>
