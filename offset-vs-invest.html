@@ -30,7 +30,6 @@
       <div class="input-group"><label>Marginal Tax Rate (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="taxRate" value="37" step="1"></div></div>
       <div class="input-group"><label>Loan Balance <span style="font-weight:400;color:var(--subtle)">(optional)</span></label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="loanBal" value="" step="10000" placeholder="e.g. 500000"></div></div>
       <div class="input-group"><label>Current Offset Balance <span style="font-weight:400;color:var(--subtle)">(optional)</span></label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="currentOffset" value="" step="5000" placeholder="e.g. 80000"></div></div>
-      <div class="input-group"><label>Remaining Loan Term (years) <span style="font-weight:400;color:var(--subtle)">(optional)</span></label><div class="input-wrap"><span class="pfx">yr</span><input type="number" id="loanTerm" value="" step="1" min="1" max="40" placeholder="e.g. 25"></div></div>
       <div class="input-group"><label>Weekly Repayment <span style="font-weight:400;color:var(--subtle)">(optional)</span></label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="weeklyRepay" value="" step="50" placeholder="e.g. 1200"></div></div>
     </div>
     <div class="sep"></div>
@@ -60,8 +59,9 @@
 
 <script>
 const STORAGE_KEY = 'offset-vs-invest-v1';
-const DEFAULTS = { mortgageRate: 6.00, taxRate: 37, investReturn: 9.00, investType: 'growth', amount: 50000, years: 10, loanBal: '', currentOffset: '', loanTerm: '', weeklyRepay: '' };
-const IDS = ['mortgageRate','taxRate','investReturn','investType','amount','years','loanBal','currentOffset','loanTerm','weeklyRepay'];
+const DEFAULTS = { mortgageRate: 6.00, taxRate: 37, investReturn: 9.00, investType: 'growth',
+                   amount: 50000, years: 10, loanBal: '', currentOffset: '', weeklyRepay: '' };
+const IDS = ['mortgageRate','taxRate','investReturn','investType','amount','years','loanBal','currentOffset','weeklyRepay'];
 
 var saveTimer = null;
 function flashSaved() {
@@ -84,130 +84,120 @@ function g(id) { return +document.getElementById(id).value || 0; }
 function gs(id) { return document.getElementById(id).value; }
 
 function calcAfterTaxReturn(grossPct, taxRate, type) {
-  if (type === 'super')   return grossPct * (1 - 0.15);
-  if (type === 'income')  return grossPct * (1 - taxRate / 100);
-  // CGT 50% discount — blended approximation
-  return grossPct * (1 - (taxRate / 100) * 0.5);
+  if (type === 'super')  return grossPct * (1 - 0.15);
+  if (type === 'income') return grossPct * (1 - taxRate / 100);
+  return grossPct * (1 - (taxRate / 100) * 0.5); // growth: CGT 50% discount
 }
 
 var chart = null;
 
 function render() {
-  var mr          = g('mortgageRate') / 100;
-  var tr          = g('taxRate');
-  var ir          = g('investReturn');
-  var type        = gs('investType');
-  var amount      = g('amount');
-  var years       = Math.round(g('years'));
-  var loanBal     = g('loanBal');
-  var curOffset   = g('currentOffset');
-  var loanTerm    = g('loanTerm');
-  var weeklyRepay = g('weeklyRepay');
-
-  var investRate  = calcAfterTaxReturn(ir, tr, type) / 100;
+  var mr           = g('mortgageRate') / 100;
+  var tr           = g('taxRate');
+  var ir           = g('investReturn');
+  var type         = gs('investType');
+  var amount       = g('amount');
+  var years        = Math.round(g('years')) || 10;
+  var loanBal      = g('loanBal');
+  var curOffset    = g('currentOffset');
+  var weeklyRepay  = g('weeklyRepay');
+  var investRate   = calcAfterTaxReturn(ir, tr, type) / 100;
   var taxFreeEquiv = mr / (1 - tr / 100) * 100;
+  var rm           = mr / 12;
+  var monthlyRepay = weeklyRepay > 0 ? weeklyRepay * 52 / 12 : null;
 
-  // How much of the deployed amount is actually useful in the offset
-  // (capped by how much headroom exists before loan balance is exceeded)
-  var usefulAmount = amount;
-  if (loanBal > 0) {
-    var headroom = Math.max(0, loanBal - curOffset);
-    usefulAmount = Math.min(amount, headroom);
-  }
-
-  // Overfunding warning
+  // ── Overfunding warning ───────────────────────────────────────────────────
   var warningEl = document.getElementById('overfundingWarning');
-  if (loanBal > 0 && usefulAmount < amount) {
-    var wasted = amount - usefulAmount;
+  if (loanBal > 0 && curOffset + amount > loanBal) {
+    var wasted = (curOffset + amount) - loanBal;
     warningEl.style.display = '';
     warningEl.innerHTML = '<div class="callout-title" style="color:var(--gold)">&#9888; Offset overfunding</div>' +
-      '<div class="callout-sub" style="color:var(--text);margin-top:4px">$' + wasted.toLocaleString() + ' of the $' + amount.toLocaleString() + ' would exceed your loan balance and earn nothing in the offset. ' +
-      'Only $' + usefulAmount.toLocaleString() + ' is working for you.</div>';
+      '<div class="callout-sub" style="color:var(--text);margin-top:4px">$' + wasted.toLocaleString() +
+      ' of the $' + amount.toLocaleString() + ' would push total offset above the loan balance and earn nothing. ' +
+      'Only $' + Math.max(0, loanBal - curOffset).toLocaleString() + ' is useful here.</div>';
   } else {
     warningEl.style.display = 'none';
   }
 
-  // ── Core model ──────────────────────────────────────────────────────────────
-  // Offset strategy: you keep your $amount. Each year it saves you interest.
-  //   Annual interest saved = usefulAmount × mortgage_rate (tax-free)
-  //   This saving does NOT compound — it's cash you simply didn't pay out.
-  //   If the loan pays off (via amortisation or loanTerm), savings stop.
+  // ── Core model ────────────────────────────────────────────────────────────
+  // Run BOTH amortisation paths simultaneously, month by month.
   //
-  // Invest strategy: $amount compounds at after-tax return each year.
+  // Offset path:  effective balance = loan - (curOffset + amount)
+  // Invest path:  effective balance = loan - curOffset
   //
-  // Both strategies: you still have your original $amount at year 0.
-  // The question is purely: which path accumulates more ADDITIONAL value?
-  // ────────────────────────────────────────────────────────────────────────────
+  // Interest saved each month = invest_interest - offset_interest
+  // (naturally accounts for the loan amortising differently in each path)
+  //
+  // If no loan details provided, fall back to simple rate comparison.
+  // ─────────────────────────────────────────────────────────────────────────
+  var horizonMonths = years * 12;
+  var useAmortisation = loanBal > 0 && monthlyRepay;
 
-  // Work out when loan pays off (for stopping offset savings)
-  var loanPayoffYear = null;
-  if (weeklyRepay > 0 && loanBal > 0) {
-    // Run amortisation month by month
-    var rm = mr / 12;
-    var monthlyRepay = weeklyRepay * 52 / 12;
-    var bal = loanBal;
-    for (var m = 1; m <= 600; m++) {
-      var interest = bal * rm;
-      var principal = Math.min(monthlyRepay - interest, bal);
-      bal = Math.max(bal - principal, 0);
-      if (bal <= 0) { loanPayoffYear = m / 12; break; }
-    }
-  } else if (loanTerm > 0) {
-    loanPayoffYear = loanTerm;
-  }
+  var offsetValues = [amount]; // year 0: you still have your money
+  var investValues = [amount];
 
-  // Annual interest saved = usefulAmount × mortgage rate (simple, no compounding)
-  var annualInterestSaved = usefulAmount * mr;
+  if (useAmortisation) {
+    var loanO = loanBal; // offset-path loan balance
+    var loanI = loanBal; // invest-path loan balance
+    var cumSaved = 0;
 
-  // Build year-by-year arrays
-  // offsetValues[y] = original amount + cumulative interest saved up to year y
-  // investValues[y] = original amount compounded at invest rate for y years
-  var offsetValues = [];
-  var investValues = [];
-  var cumulativeSavings = 0;
+    for (var m = 1; m <= horizonMonths; m++) {
+      // Offset path: effective balance capped so offset can't exceed loan
+      var totalOffsetO = Math.min(curOffset + amount, loanO);
+      var effO = Math.max(loanO - totalOffsetO, 0);
+      var intO = effO * rm;
+      var prinO = monthlyRepay ? Math.min(monthlyRepay - intO, loanO) : 0;
+      if (prinO < 0) prinO = 0;
+      loanO = Math.max(loanO - prinO, 0);
 
-  for (var y = 0; y <= years; y++) {
-    if (y > 0) {
-      // Add this year's interest saving (zero if loan paid off)
-      if (loanPayoffYear === null || y <= loanPayoffYear) {
-        // Partial year at payoff
-        var fraction = (loanPayoffYear !== null && y > Math.floor(loanPayoffYear))
-          ? loanPayoffYear - Math.floor(loanPayoffYear)
-          : 1;
-        cumulativeSavings += annualInterestSaved * fraction;
+      // Invest path: effective balance = loan minus existing offset only
+      var totalOffsetI = Math.min(curOffset, loanI);
+      var effI = Math.max(loanI - totalOffsetI, 0);
+      var intI = effI * rm;
+      var prinI = monthlyRepay ? Math.min(monthlyRepay - intI, loanI) : 0;
+      if (prinI < 0) prinI = 0;
+      loanI = Math.max(loanI - prinI, 0);
+
+      // Interest saved = what invest path paid minus what offset path paid
+      cumSaved += Math.max(0, intI - intO);
+
+      if (m % 12 === 0) {
+        offsetValues.push(Math.round(amount + cumSaved));
+        investValues.push(Math.round(amount * Math.pow(1 + investRate, m / 12)));
       }
     }
-    offsetValues.push(Math.round(amount + cumulativeSavings));
-    investValues.push(Math.round(amount * Math.pow(1 + investRate, y)));
+  } else {
+    // Simple model: annual interest saved = amount × mortgage rate (constant)
+    var annualSaved = amount * mr;
+    for (var y = 1; y <= years; y++) {
+      offsetValues.push(Math.round(amount + annualSaved * y));
+      investValues.push(Math.round(amount * Math.pow(1 + investRate, y)));
+    }
   }
 
   var offsetFinal = offsetValues[years];
   var investFinal = investValues[years];
   var offsetWins  = offsetFinal >= investFinal;
 
-  // Break-even: find the year one strategy crosses over the other
+  // Break-even: find actual crossover year
   var breakEven = null;
   for (var y2 = 1; y2 <= years; y2++) {
-    var ov = offsetValues[y2], iv = investValues[y2];
     var prevOv = offsetValues[y2 - 1], prevIv = investValues[y2 - 1];
-    // Detect crossover between y2-1 and y2
+    var ov = offsetValues[y2], iv = investValues[y2];
     if ((prevOv >= prevIv && iv > ov) || (prevIv > prevOv && ov >= iv)) {
-      breakEven = y2;
-      break;
+      breakEven = y2; break;
     }
   }
 
-  // Total nominal interest saved
-  var totalInterestSaved = loanPayoffYear !== null
-    ? Math.round(usefulAmount * mr * Math.min(loanPayoffYear, years))
-    : Math.round(usefulAmount * mr * years);
+  // Total interest saved (nominal)
+  var totalInterestSaved = offsetFinal - amount; // cumSaved at final year
 
   // ── Stat cards ────────────────────────────────────────────────────────────
   document.getElementById('statsRow').innerHTML =
     '<div class="stat-card" style="border-top-color:var(--blue)">' +
       '<div class="stat-label">Offset return (tax-free)</div>' +
       '<div class="stat-value" style="color:var(--blue)">' + (mr*100).toFixed(2) + '%</div>' +
-      '<div class="stat-sub">Equiv. taxable: ' + taxFreeEquiv.toFixed(2) + '%</div>' +
+      '<div class="stat-sub">Equiv. taxable: ' + taxFreeEquiv.toFixed(2) + '%' + (useAmortisation ? ' · amortisation-aware' : '') + '</div>' +
     '</div>' +
     '<div class="stat-card" style="border-top-color:var(--green)">' +
       '<div class="stat-label">Investment after-tax return</div>' +
@@ -217,7 +207,7 @@ function render() {
     '<div class="stat-card" style="border-top-color:var(--gold)">' +
       '<div class="stat-label">Interest saved over ' + years + ' yrs</div>' +
       '<div class="stat-value" style="color:var(--gold)">$' + totalInterestSaved.toLocaleString() + '</div>' +
-      '<div class="stat-sub">On $' + usefulAmount.toLocaleString() + ' useful offset' + (loanPayoffYear ? ' · loan off yr ' + loanPayoffYear.toFixed(1) : '') + '</div>' +
+      '<div class="stat-sub">' + (useAmortisation ? 'Difference vs investing: loan amortises independently in each path' : 'On $' + amount.toLocaleString() + ' at ' + (mr*100).toFixed(2) + '%') + '</div>' +
     '</div>' +
     '<div class="stat-card" style="border-top-color:' + (offsetWins ? 'var(--blue)' : 'var(--green)') + '">' +
       '<div class="stat-label">Better at year ' + years + '</div>' +
@@ -226,7 +216,7 @@ function render() {
     '</div>' +
     '<div class="stat-card">' +
       '<div class="stat-label">Break-even year</div>' +
-      '<div class="stat-value">' + (breakEven ? 'Year ' + breakEven : (offsetWins ? 'Never (offset ahead)' : 'Never (invest ahead)')) + '</div>' +
+      '<div class="stat-value">' + (breakEven ? 'Year ' + breakEven : (offsetWins ? 'Never (offset always ahead)' : 'Never (invest always ahead)')) + '</div>' +
     '</div>';
 
   // ── Chart ──────────────────────────────────────────────────────────────────
@@ -242,32 +232,33 @@ function render() {
       responsive: true, animation: false, interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { labels: { color: '#7d8590', font: { family: 'DM Sans', size: 12 }, boxWidth: 20 } },
-        tooltip: { backgroundColor: '#0d1117', borderColor: '#21262d', borderWidth: 1, titleColor: '#7d8590', bodyColor: '#e6edf3',
+        tooltip: { backgroundColor: '#0d1117', borderColor: '#21262d', borderWidth: 1,
+          titleColor: '#7d8590', bodyColor: '#e6edf3',
           callbacks: { label: function(c) { return ' ' + c.dataset.label + ': $' + c.parsed.y.toLocaleString(); } }
         }
       },
       scales: {
         x: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 } }, grid: { color: '#21262d' } },
-        y: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 }, callback: function(v) { return '$' + (v/1000).toFixed(0) + 'k'; } }, grid: { color: '#21262d' } }
+        y: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 },
+          callback: function(v) { return '$' + (v/1000).toFixed(0) + 'k'; } }, grid: { color: '#21262d' } }
       }
     }
   });
 
   // ── Table ──────────────────────────────────────────────────────────────────
-  document.getElementById('tableHead').innerHTML = '<th>Year</th><th>Offset value</th><th>Invest value</th><th>Interest saved</th><th>Invest gain</th><th>Difference</th>';
+  document.getElementById('tableHead').innerHTML =
+    '<th>Year</th><th>Offset value</th><th>Invest value</th><th>Interest saved</th><th>Invest gain</th><th>Difference</th>';
   var rows = [1, 2, 3, 5, 7, 10, 15, 20, 25, 30].filter(function(y) { return y <= years; });
   if (!rows.includes(years)) rows.push(years);
   document.getElementById('tableBody').innerHTML = rows.map(function(y) {
-    var ov = offsetValues[y], iv = investValues[y];
-    var diff = ov - iv;
-    var winner = diff >= 0 ? 'var(--blue)' : 'var(--green)';
+    var ov = offsetValues[y], iv = investValues[y], diff = ov - iv;
     return '<tr>' +
       '<td>' + y + '</td>' +
       '<td style="color:var(--blue)">$' + ov.toLocaleString() + '</td>' +
       '<td style="color:var(--green)">$' + iv.toLocaleString() + '</td>' +
       '<td>$' + (ov - amount).toLocaleString() + '</td>' +
       '<td>$' + (iv - amount).toLocaleString() + '</td>' +
-      '<td style="color:' + winner + ';font-weight:600">' + (diff >= 0 ? '+' : '') + '$' + diff.toLocaleString() + '</td>' +
+      '<td style="color:' + (diff >= 0 ? 'var(--blue)' : 'var(--green)') + ';font-weight:600">' + (diff >= 0 ? '+' : '') + '$' + diff.toLocaleString() + '</td>' +
     '</tr>';
   }).join('');
 }
