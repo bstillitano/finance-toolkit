@@ -339,6 +339,20 @@ function renderFavGrid() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+// Handle Supabase magic link callback — cleans up the hash after auth
+if (window.location.hash && window.location.hash.includes('access_token=')) {
+  // Supabase JS picks up the hash automatically via onAuthStateChange.
+  // Once it fires, replace the ugly hash URL with a clean one.
+  const _origOnAuth = window._onAuthStateChange;
+  const _hashCleanup = setInterval(function () {
+    if (window.location.hash.includes('access_token=')) {
+      history.replaceState(null, '', window.location.pathname);
+    } else {
+      clearInterval(_hashCleanup);
+    }
+  }, 500);
+}
+
 FinanceNav.init({
   onFavouritesLoad: function(keys) {
     updateStars();
