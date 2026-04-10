@@ -80,13 +80,15 @@ let assets, liabilities, nextAId, nextLId;
 let donutChart = null, barChart = null;
 let saveTimer = null;
 
-function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
+function flashSaved() { const el = document.getElementById('saveInd'); if (!el) return; el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
 
 function saveState() {
-  const _nwState = { assets, liabilities, nextAId, nextLId };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(_nwState));
-  if (window.CloudSync) { CloudSync.save('net-worth', _nwState); localStorage.setItem('net-worth_updated_at', Date.now().toString()); }
-  flashSaved();
+  try {
+    const _nwState = { assets, liabilities, nextAId, nextLId };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(_nwState));
+    if (window.CloudSync) { CloudSync.save('net-worth', _nwState); localStorage.setItem('net-worth_updated_at', Date.now().toString()); }
+    flashSaved();
+  } catch(e) { console.warn('saveState failed:', e); }
 }
 
 function loadState() {
@@ -117,10 +119,12 @@ function renderList(containerId, items, type) {
     saveState(); renderChart();
   }));
   container.querySelectorAll('.remove-btn').forEach(el => el.addEventListener('click', e => {
-    const { idx, type: t } = e.target.dataset;
-    if (t === 'asset') assets.splice(idx, 1);
-    else liabilities.splice(idx, 1);
-    saveState(); renderList(containerId, t === 'asset' ? assets : liabilities, t); renderChart();
+    try {
+      const { idx, type: t } = e.target.dataset;
+      if (t === 'asset') assets.splice(+idx, 1);
+      else liabilities.splice(+idx, 1);
+      saveState(); renderList(containerId, t === 'asset' ? assets : liabilities, t); renderChart();
+    } catch(e) { console.error('removeItem failed:', e); }
   }));
 }
 
@@ -174,12 +178,16 @@ function init() {
 }
 
 document.getElementById('addAssetBtn').addEventListener('click', () => {
-  assets.push({ id: nextAId++, label: 'Asset', value: 0 });
-  saveState(); renderList('assetList', assets, 'asset'); renderChart();
+  try {
+    assets.push({ id: nextAId++, label: 'Asset', value: 0 });
+    saveState(); renderList('assetList', assets, 'asset'); renderChart();
+  } catch(e) { console.error('addAsset failed:', e); }
 });
 document.getElementById('addLiabilityBtn').addEventListener('click', () => {
-  liabilities.push({ id: nextLId++, label: 'Liability', value: 0 });
-  saveState(); renderList('liabilityList', liabilities, 'liability'); renderChart();
+  try {
+    liabilities.push({ id: nextLId++, label: 'Liability', value: 0 });
+    saveState(); renderList('liabilityList', liabilities, 'liability'); renderChart();
+  } catch(e) { console.error('addLiability failed:', e); }
 });
 document.getElementById('resetBtn').addEventListener('click', () => {
   if (!confirm('Reset to defaults?')) return;
