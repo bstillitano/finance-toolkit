@@ -55,8 +55,8 @@ html, body { background: var(--bg); color: var(--text); font-family: 'DM Sans', 
 
 /* inputs */
 .input-grid { display: flex; gap: 14px; flex-wrap: wrap; align-items: stretch; }
-.input-group { flex: 1 1 150px; display: flex; flex-direction: column; justify-content: flex-end; }
-.input-group label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+.input-group { flex: 1 1 150px; display: flex; flex-direction: column; }
+.input-group label { flex-grow: 1; display: flex; align-items: flex-end; font-size: 11px; color: var(--muted); padding-bottom: 6px; }
 .input-wrap { position: relative; }
 .pfx { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-family: 'DM Mono', monospace; font-size: 12px; pointer-events: none; }
 input[type=number], input[type=text], select {
