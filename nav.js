@@ -215,6 +215,7 @@
     const signoutBtn = document.getElementById('nav-signout');
     if (signoutBtn) {
       signoutBtn.addEventListener('click', async function () {
+        if (!confirm('Are you sure you want to sign out?')) return;
         await sb.auth.signOut();
         currentUser = null;
         refreshAuthArea();
