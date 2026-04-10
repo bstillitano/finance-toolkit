@@ -315,7 +315,10 @@
       const email = document.getElementById('auth-email-ml').value.trim();
       if (!email) { showAuthError('Please enter your email address.'); return; }
       setAuthLoading(true);
-      const { error } = await sb.auth.signInWithOtp({ email });
+      const { error } = await sb.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: 'https://bstillitano.github.io/finance-toolkit/' },
+      });
       setAuthLoading(false);
       if (error) { showAuthError(error.message); return; }
       showAuthSuccess('Magic link sent! Check your email and click the link to sign in.');
