@@ -214,3 +214,6 @@ tr.positive td { color: var(--green); }
 .footer a { color: var(--text); text-decoration: underline; }
 .footer a:visited { color: var(--text); }
 .footer a:hover { color: #fff; }
+
+.remove-btn { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 4px; cursor: pointer; font-size: 16px; line-height: 1; padding: 4px 8px; transition: all 0.15s; flex-shrink: 0; margin-left: auto; }
+.remove-btn:hover { border-color: var(--red); color: var(--red); }
