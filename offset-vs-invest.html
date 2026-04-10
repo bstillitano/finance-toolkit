@@ -216,7 +216,14 @@ function render() {
     '</div>' +
     '<div class="stat-card">' +
       '<div class="stat-label">Break-even year</div>' +
-      '<div class="stat-value">' + (breakEven ? 'Year ' + breakEven : (offsetWins ? 'Never (offset always ahead)' : 'Never (invest always ahead)')) + '</div>' +
+      '<div class="stat-value">' + (breakEven ? 'Year ' + breakEven : (offsetWins ? 'Never' : 'Never')) + '</div>' +
+      '<div class="stat-sub">' + (breakEven
+        ? (offsetWins
+          ? 'Invest overtakes offset after year ' + breakEven + ' — offset is better before this'
+          : 'Offset is better up to year ' + breakEven + ', invest wins beyond that')
+        : (offsetWins
+          ? 'Offset stays ahead for the entire ' + years + '-year horizon'
+          : 'Invest stays ahead for the entire ' + years + '-year horizon')) + '</div>' +
     '</div>';
 
   // ── Chart ──────────────────────────────────────────────────────────────────
