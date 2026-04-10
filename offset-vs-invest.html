@@ -185,12 +185,16 @@ function render() {
   var investFinal = investValues[years];
   var offsetWins  = offsetFinal >= investFinal;
 
-  // Break-even: first year invest catches up to offset (or vice versa)
+  // Break-even: find the year one strategy crosses over the other
   var breakEven = null;
   for (var y2 = 1; y2 <= years; y2++) {
     var ov = offsetValues[y2], iv = investValues[y2];
-    if (offsetWins && iv >= ov) { breakEven = y2; break; }
-    if (!offsetWins && ov >= iv) { breakEven = y2; break; }
+    var prevOv = offsetValues[y2 - 1], prevIv = investValues[y2 - 1];
+    // Detect crossover between y2-1 and y2
+    if ((prevOv >= prevIv && iv > ov) || (prevIv > prevOv && ov >= iv)) {
+      breakEven = y2;
+      break;
+    }
   }
 
   // Total nominal interest saved
