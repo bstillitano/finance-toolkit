@@ -65,7 +65,7 @@
   <div class="header-row">
     <div>
       <h1>FIRE Timeline</h1>
-      <p class="subtitle">Calculate your path to financial independence and early retirement. Uses a safe withdrawal rate (default 4%) to determine your FI number. Enter your <strong>investable</strong> net worth only — exclude your PPOR.</p>
+      <p class="subtitle">Calculate your path to financial independence. Enter your <strong>investable</strong> net worth — see the guidance below for what to include and exclude.</p>
     </div>
     <div class="header-actions">
       <button class="reset-btn" id="resetBtn">Reset</button>
@@ -88,6 +88,38 @@
       <div class="input-group"><label>Post-retirement Return (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="retireRate" value="6" step="0.5"></div></div>
       <div class="input-group"><label>Withdrawal Rate (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="withdrawRate" value="4" step="0.1" min="1" max="10"></div></div>
       <div class="input-group"><label>Inflation (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="inflation" value="3" step="0.5"></div></div>
+    </div>
+  </div>
+
+  <!-- Guidance panel -->
+  <div class="panel" style="border-color:rgba(88,166,255,0.25);background:rgba(88,166,255,0.04);margin-bottom:20px">
+    <div class="section-title" style="color:var(--blue)">What to enter as Current Net Worth</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:13px;line-height:1.6">
+      <div>
+        <p style="color:var(--green);font-weight:600;margin-bottom:6px">✓ Include</p>
+        <ul style="color:var(--muted);padding-left:16px;display:flex;flex-direction:column;gap:4px">
+          <li>Investment property equity (value minus loan)</li>
+          <li>Share portfolio / ETFs / managed funds</li>
+          <li>Cash savings and offset account balance</li>
+          <li>Family trust investable assets</li>
+          <li>Super <em>— but read the note below</em></li>
+        </ul>
+      </div>
+      <div>
+        <p style="color:var(--red);font-weight:600;margin-bottom:6px">✗ Exclude</p>
+        <ul style="color:var(--muted);padding-left:16px;display:flex;flex-direction:column;gap:4px">
+          <li>Primary place of residence equity — you live there, it generates no income</li>
+          <li>Personal property (cars, jewellery, etc.)</li>
+          <li>Unvested shares or options</li>
+          <li>Business goodwill (unless you intend to sell)</li>
+        </ul>
+      </div>
+    </div>
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(88,166,255,0.15);font-size:12px;color:var(--muted);line-height:1.6">
+      <strong style="color:var(--gold)">⚠ Super and early retirement:</strong>
+      Super is only accessible at your preservation age (currently 60 for most people). If you're targeting retirement before 60, you need to fund the gap years from non-super assets alone.
+      The conservative approach is to <strong>run two scenarios</strong>: one excluding super (to confirm you can fund retirement until ~60), and one including it (to confirm long-term sustainability).
+      If you include super, mentally note that those funds aren't available until preservation age — your non-super assets carry all the weight in the early years.
     </div>
   </div>
 

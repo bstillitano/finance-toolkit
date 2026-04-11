@@ -77,11 +77,45 @@
   <div class="header-row">
     <div>
       <h1>Net Worth Tracker</h1>
-      <p class="subtitle">Track your assets and liabilities across home equity, super, investments, cash, and debt.</p>
+      <p class="subtitle">Track your full balance sheet. See the guidance below for what to enter under assets vs. liabilities.</p>
     </div>
     <div class="header-actions">
       <button class="reset-btn" id="resetBtn">Reset</button>
       <div class="save-indicator" id="saveInd"><div class="dot"></div> Saved</div>
+    </div>
+  </div>
+
+  <!-- Guidance panel -->
+  <div class="panel" style="border-color:rgba(88,166,255,0.25);background:rgba(88,166,255,0.04);margin-bottom:20px">
+    <div class="section-title" style="color:var(--blue)">What to include</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:13px;line-height:1.6">
+      <div>
+        <p style="color:var(--green);font-weight:600;margin-bottom:8px">Assets — enter the current market value</p>
+        <ul style="color:var(--muted);padding-left:16px;display:flex;flex-direction:column;gap:5px">
+          <li><strong style="color:var(--text)">Primary home</strong> — current estimated value (enter gross; offset the mortgage under liabilities)</li>
+          <li><strong style="color:var(--text)">Investment property</strong> — current estimated value (enter gross; offset the loan under liabilities)</li>
+          <li><strong style="color:var(--text)">Super / SMSF</strong> — current balance</li>
+          <li><strong style="color:var(--text)">Share portfolio / ETFs</strong> — current market value</li>
+          <li><strong style="color:var(--text)">Family trust</strong> — investable asset value (property at market value, investment portfolio at current value)</li>
+          <li><strong style="color:var(--text)">Offset / cash savings</strong> — current balance</li>
+        </ul>
+      </div>
+      <div>
+        <p style="color:var(--red);font-weight:600;margin-bottom:8px">Liabilities — enter the outstanding balance</p>
+        <ul style="color:var(--muted);padding-left:16px;display:flex;flex-direction:column;gap:5px">
+          <li><strong style="color:var(--text)">Home mortgage</strong> — loan balance (not the original loan amount)</li>
+          <li><strong style="color:var(--text)">Investment loan</strong> — outstanding principal</li>
+          <li><strong style="color:var(--text)">SMSF borrowings</strong> — if your fund holds leveraged assets</li>
+          <li><strong style="color:var(--text)">Personal / car loans</strong> — outstanding balances</li>
+          <li><strong style="color:var(--text)">Credit card balances</strong> — if carrying a balance</li>
+        </ul>
+      </div>
+    </div>
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(88,166,255,0.15);font-size:12px;color:var(--muted);line-height:1.6">
+      <strong style="color:var(--gold)">⚠ Net worth vs. investable net worth:</strong>
+      Your total net worth includes your PPOR and other illiquid assets. For FIRE planning purposes, your <em>investable</em> net worth — what's actually available to fund retirement — is materially lower.
+      Super is also inaccessible until preservation age (~60), so if you're targeting early retirement, the assets outside super carry all the weight in the gap years.
+      Use the <a href="fire-timeline.html" style="color:var(--blue)">FIRE Timeline</a> tool to model the distinction.
     </div>
   </div>
 
