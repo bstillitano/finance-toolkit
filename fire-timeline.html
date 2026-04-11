@@ -76,10 +76,26 @@
   <div class="panel">
     <div class="section-title">Current Situation</div>
     <div class="input-grid">
-      <div class="input-group"><label>Current Investable Net Worth<span style="display:block;font-weight:400;color:var(--subtle);font-size:10px;margin-top:2px">Shares, super, cash, investment property equity. Exclude your PPOR.</span></label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="netWorth" value="200000" step="10000"></div></div>
-      <div class="input-group"><label>Annual Income</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="income" value="120000" step="5000"></div></div>
-      <div class="input-group"><label>Annual Spend</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="spend" value="70000" step="5000"></div></div>
-      <div class="input-group"><label>Current Age</label><div class="input-wrap"><span class="pfx">yr</span><input type="number" id="age" value="32" step="1" min="18" max="80"></div></div>
+      <div class="input-group">
+        <label>Current Investable Net Worth</label>
+        <p style="font-size:11px;color:var(--subtle);margin-bottom:6px;line-height:1.4">Shares, super, cash, investment property equity. Exclude your PPOR.</p>
+        <div class="input-wrap"><span class="pfx">$</span><input type="number" id="netWorth" value="200000" step="10000"></div>
+      </div>
+      <div class="input-group">
+        <label>Annual Savings</label>
+        <p style="font-size:11px;color:var(--subtle);margin-bottom:6px;line-height:1.4">Amount you invest or save each year before retirement.</p>
+        <div class="input-wrap"><span class="pfx">$</span><input type="number" id="income" value="50000" step="5000"></div>
+      </div>
+      <div class="input-group">
+        <label>Retirement Income Target</label>
+        <p style="font-size:11px;color:var(--subtle);margin-bottom:6px;line-height:1.4">Annual income you want to draw in retirement. This drives your FI number.</p>
+        <div class="input-wrap"><span class="pfx">$</span><input type="number" id="spend" value="70000" step="5000"></div>
+      </div>
+      <div class="input-group">
+        <label>Current Age</label>
+        <p style="font-size:11px;color:var(--subtle);margin-bottom:6px;line-height:1.4">&nbsp;</p>
+        <div class="input-wrap"><span class="pfx">yr</span><input type="number" id="age" value="32" step="1" min="18" max="80"></div>
+      </div>
     </div>
     <div class="sep"></div>
     <div class="section-title">Assumptions</div>
@@ -138,7 +154,7 @@
 <script>
 const STORAGE_KEY = 'fire-timeline-v1';
 const IDS = ['netWorth','income','spend','age','growthRate','retireRate','withdrawRate','inflation'];
-const DEFAULTS = { netWorth:200000, income:120000, spend:70000, age:32, growthRate:8, retireRate:6, withdrawRate:4, inflation:3 };
+const DEFAULTS = { netWorth:200000, income:50000, spend:70000, age:32, growthRate:8, retireRate:6, withdrawRate:4, inflation:3, startYear:2026 };
 
 let saveTimer = null;
 function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
@@ -151,15 +167,15 @@ function g(id) { return +document.getElementById(id).value || 0; }
 let chart = null;
 
 function render() {
-  const nw = g('netWorth'), income = g('income'), spend = g('spend');
+  const nw = g('netWorth'), annualSavingsInput = g('income'), retirementIncome = g('spend');
   const age = g('age'), growthRate = g('growthRate') / 100;
   const retireRate = g('retireRate') / 100;
   const wr = g('withdrawRate') / 100;
   const inflation = g('inflation') / 100;
 
-  const annualSavings = income - spend;
-  const fiTarget = spend / wr;
-  const savingsRate = income > 0 ? (annualSavings / income * 100) : 0;
+  const annualSavings = annualSavingsInput;
+  const fiTarget = retirementIncome / wr;
+  const savingsRate = 0;
 
   // Year-by-year accumulation
   const sy = new Date().getFullYear();
@@ -183,7 +199,7 @@ function render() {
   let portfolioBalance = fireYear !== null ? worths[fireYear] : 0;
   let postFireYears = 0;
   if (portfolioBalance > 0) {
-    let pb = portfolioBalance, annualWithdraw = spend;
+    let pb = portfolioBalance, annualWithdraw = retirementIncome;
     for (let y = 0; y <= 60; y++) {
       pb = pb * (1 + retireRate) - annualWithdraw;
       annualWithdraw *= (1 + inflation);
@@ -194,9 +210,9 @@ function render() {
 
   document.getElementById('statsRow').innerHTML = `
     <div class="stat-card" style="border-top-color:var(--gold)">
-      <div class="stat-label">FI Target</div>
+      <div class="stat-label">FI Number</div>
       <div class="stat-value" style="color:var(--gold)">$${fiTarget.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
-      <div class="stat-sub">At ${(wr*100).toFixed(1)}% withdrawal rate</div>
+      <div class="stat-sub">At ${(wr*100).toFixed(1)}% withdrawal · $${retirementIncome.toLocaleString()} p.a. income</div>
     </div>
     <div class="stat-card" style="border-top-color:var(--green)">
       <div class="stat-label">FIRE Date</div>
@@ -206,7 +222,7 @@ function render() {
     <div class="stat-card" style="border-top-color:var(--blue)">
       <div class="stat-label">Annual Savings</div>
       <div class="stat-value" style="color:var(--blue)">$${annualSavings.toLocaleString()}</div>
-      <div class="stat-sub">Savings rate: ${savingsRate.toFixed(1)}%</div>
+      <div class="stat-sub">Per year before retirement</div>
     </div>
     <div class="stat-card" style="border-top-color:${postFireYears >= 40 ? 'var(--green)' : postFireYears >= 20 ? 'var(--gold)' : 'var(--red)'}">
       <div class="stat-label">Portfolio lasts</div>
