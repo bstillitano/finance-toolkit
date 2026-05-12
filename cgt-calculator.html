@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CGT Discount vs. Indexation — Finance Toolkit</title>
+  <link rel="stylesheet" href="shared.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="config.js" onerror="window.APP_CONFIG={}"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="nav.js"></script>
+
+  <!-- Firebase Analytics — config injected at deploy time via config.js -->
+  <script src="config.js" onerror="window.APP_CONFIG=window.APP_CONFIG||{}"></script>
+  <script type="module">
+    const cfg = window.APP_CONFIG || {};
+    if (!cfg.firebaseMeasurementId) return;
+
+    const { initializeApp }                    = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+    const { getAnalytics, logEvent,
+            setUserId, setUserProperties }     = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js');
+    const { createClient }                     = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+
+    const app = initializeApp({
+      apiKey:            cfg.firebaseApiKey,
+      authDomain:        cfg.firebaseAuthDomain,
+      projectId:         cfg.firebaseProjectId,
+      storageBucket:     cfg.firebaseStorageBucket,
+      messagingSenderId: cfg.firebaseSenderId,
+      appId:             cfg.firebaseAppId,
+      measurementId:     cfg.firebaseMeasurementId,
+    });
+    const analytics = getAnalytics(app);
+    window._analytics = analytics;
+    window._logEvent  = logEvent;
+
+    if (cfg.supabaseUrl && cfg.supabaseKey) {
+      try {
+        const supabase = createClient(cfg.supabaseUrl, cfg.supabaseKey);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setUserId(analytics, session.user.id);
+          setUserProperties(analytics, {
+            user_type:    'authenticated',
+            email:        session.user.email,
+            email_domain: session.user.email.split('@')[1] ?? 'unknown',
+          });
+        } else {
+          setUserProperties(analytics, { user_type: 'anonymous' });
+        }
+      } catch (e) {
+        setUserProperties(analytics, { user_type: 'anonymous' });
+      }
+    } else {
+      setUserProperties(analytics, { user_type: 'anonymous' });
+    }
+  </script>
+</head>
+<body>
+<div id="global-nav"></div>
+<div class="app">
+  <div class="header-row">
+    <div>
+      <h1>CGT Discount vs. Indexation</h1>
+      <p class="subtitle">Compare after-tax proceeds under the old 50% CGT discount method and the new CPI-indexed cost base method.</p>
+    </div>
+    <div class="header-actions">
+      <button class="reset-btn" id="resetBtn">Reset</button>
+      <div class="save-indicator" id="saveInd"><div class="dot"></div> Saved</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="input-grid">
+      <div class="input-group"><label>Purchase Price (cost base)</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="costBase" value="200000" step="5000"></div></div>
+      <div class="input-group"><label>Sale Price</label><div class="input-wrap"><span class="pfx">$</span><input type="number" id="salePrice" value="500000" step="5000"></div></div>
+      <div class="input-group"><label>Hold Period (years)</label><div class="input-wrap"><span class="pfx">yr</span><input type="number" id="holdYears" value="10" step="1" min="1" max="50"></div></div>
+      <div class="input-group"><label>Average CPI / Inflation (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="inflation" value="3.0" step="0.1"></div></div>
+      <div class="input-group"><label>Marginal Tax Rate (%)</label><div class="input-wrap"><span class="pfx">%</span><input type="number" id="taxRate" value="37" step="1" min="0" max="47"></div></div>
+      <div class="input-group"><label>Asset Type</label><div class="input-wrap" style="padding-left:0"><select id="assetType" style="padding-left:10px">
+        <option value="individual">Individual / Trust</option>
+        <option value="smsf">SMSF (accumulation, 15%)</option>
+        <option value="company">Company (no discount)</option>
+      </select></div></div>
+    </div>
+  </div>
+
+  <div class="stats" id="statsRow"></div>
+
+  <div class="two-col" style="margin-bottom:20px">
+    <div class="callout blue" id="discountCallout"></div>
+    <div class="callout gold" id="indexCallout"></div>
+  </div>
+
+  <div class="chart-wrap"><canvas id="myChart" height="280"></canvas></div>
+
+  <div class="panel" style="padding:0;overflow:hidden">
+    <div class="table-scroll">
+      <table><thead><tr>
+        <th>Hold Years</th>
+        <th>Nominal Gain</th>
+        <th style="color:var(--blue)">Discount Tax</th>
+        <th style="color:var(--blue)">Discount Net</th>
+        <th style="color:var(--gold)">Indexed Cost</th>
+        <th style="color:var(--gold)">Index Tax</th>
+        <th style="color:var(--gold)">Indexation Net</th>
+        <th>Better Method</th>
+      </tr></thead>
+      <tbody id="tableBody"></tbody></table>
+    </div>
+  </div>
+
+  <p class="footer">Indexation uses (1 + CPI)<sup>years</sup> applied to the cost base; the gain above the indexed cost is taxed at your full marginal rate with no discount. The 50% discount method applies to individuals and trusts on assets held over 12 months — SMSFs receive a 1/3 discount and companies receive no discount. Your inputs are saved to your browser. If you sign in, your data is synced to <a href="https://supabase.com" target="_blank" rel="noopener">Supabase</a> to enable access across devices.</p>
+</div>
+
+<script>
+const STORAGE_KEY = 'cgt-calculator-v1';
+const IDS = ['costBase','salePrice','holdYears','inflation','taxRate','assetType'];
+const DEFAULTS = { costBase: 200000, salePrice: 500000, holdYears: 10, inflation: 3.0, taxRate: 37, assetType: 'individual' };
+
+let saveTimer = null;
+function flashSaved() { const el = document.getElementById('saveInd'); el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1800); }
+function save() { const s = {}; IDS.forEach(id => s[id] = document.getElementById(id).value); localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); flashSaved();
+  if (window.CloudSync) { CloudSync.save('cgt-calculator', s); localStorage.setItem('cgt-calculator_updated_at', Date.now().toString()); } }
+function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } }
+function applyState(s) { IDS.forEach(id => { if (s[id] !== undefined) document.getElementById(id).value = s[id]; }); }
+function g(id) { return +document.getElementById(id).value || 0; }
+function gs(id) { return document.getElementById(id).value; }
+function fmt(n) { return '$' + Math.round(n).toLocaleString(); }
+function fmtSigned(n) { return (n >= 0 ? '+' : '−') + '$' + Math.abs(Math.round(n)).toLocaleString(); }
+
+function discountFactor(assetType) {
+  if (assetType === 'smsf') return 1/3;
+  if (assetType === 'company') return 0;
+  return 0.5;
+}
+function effectiveTaxRate(assetType, marginal) {
+  if (assetType === 'smsf') return 15;
+  if (assetType === 'company') return 30;
+  return marginal;
+}
+
+function compute(cost, sale, years, cpi, marginalPct, assetType) {
+  const mtr = effectiveTaxRate(assetType, marginalPct) / 100;
+  const disc = discountFactor(assetType);
+  const nominalGain = Math.max(sale - cost, 0);
+  const discTaxable = nominalGain * (1 - disc);
+  const discTax = discTaxable * mtr;
+  const discNet = sale - cost - discTax;
+
+  const indexedCost = cost * Math.pow(1 + cpi/100, years);
+  const indexedGain = Math.max(sale - indexedCost, 0);
+  const indexTax = indexedGain * mtr;
+  const indexNet = sale - cost - indexTax;
+
+  return { nominalGain, discTaxable, discTax, discNet, indexedCost, indexedGain, indexTax, indexNet, mtr, disc };
+}
+
+function breakEvenInflation(cost, sale, years, marginalPct, assetType) {
+  // Solve for i where indexTax = discTax
+  //   (sale - cost*(1+i)^y) * mtr = (sale - cost) * (1-disc) * mtr
+  //   sale - cost*(1+i)^y = (sale - cost) * (1-disc)
+  //   cost*(1+i)^y = sale - (sale-cost)*(1-disc)
+  // For disc = 0.5: cost*(1+i)^y = 0.5*sale + 0.5*cost
+  const disc = discountFactor(assetType);
+  if (disc === 0) return null; // company — no discount, indexation always >= discount method
+  const target = sale - (sale - cost) * (1 - disc);
+  if (target <= 0 || cost <= 0 || years <= 0) return null;
+  const ratio = target / cost;
+  if (ratio <= 1) return 0;
+  return (Math.pow(ratio, 1/years) - 1) * 100;
+}
+
+let chart = null;
+
+function render() {
+  const cost = g('costBase');
+  const sale = g('salePrice');
+  const years = Math.round(g('holdYears'));
+  const cpi = g('inflation');
+  const mtr = g('taxRate');
+  const assetType = gs('assetType');
+
+  const r = compute(cost, sale, years, cpi, mtr, assetType);
+  const winner = r.discNet >= r.indexNet ? 'discount' : 'indexation';
+  const advantage = Math.abs(r.discNet - r.indexNet);
+  const beInflation = breakEvenInflation(cost, sale, years, mtr, assetType);
+
+  const winnerLabel = winner === 'discount' ? '50% Discount' : 'Indexation';
+  const winnerColor = winner === 'discount' ? 'var(--blue)' : 'var(--gold)';
+
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card" style="border-top-color:var(--muted)">
+      <div class="stat-label">Nominal capital gain</div>
+      <div class="stat-value">${fmt(r.nominalGain)}</div>
+      <div class="stat-sub">Sale − cost base</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--blue)">
+      <div class="stat-label">50% discount — tax</div>
+      <div class="stat-value" style="color:var(--blue)">${fmt(r.discTax)}</div>
+      <div class="stat-sub">Net: ${fmt(r.discNet)}</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--gold)">
+      <div class="stat-label">Indexation — tax</div>
+      <div class="stat-value" style="color:var(--gold)">${fmt(r.indexTax)}</div>
+      <div class="stat-sub">Net: ${fmt(r.indexNet)}</div>
+    </div>
+    <div class="stat-card" style="border-top-color:${winnerColor}">
+      <div class="stat-label">Better method</div>
+      <div class="stat-value" style="color:${winnerColor}">${winnerLabel}</div>
+      <div class="stat-sub">${fmt(advantage)} more after tax</div>
+    </div>
+    <div class="stat-card" style="border-top-color:var(--purple)">
+      <div class="stat-label">Break-even CPI</div>
+      <div class="stat-value" style="color:var(--purple)">${beInflation == null ? '—' : beInflation.toFixed(2) + '%'}</div>
+      <div class="stat-sub">Annual CPI where the two methods give equal tax</div>
+    </div>`;
+
+  const discPct = r.nominalGain > 0 ? (r.discTax / r.nominalGain * 100).toFixed(1) : '0.0';
+  const indexPct = r.nominalGain > 0 ? (r.indexTax / r.nominalGain * 100).toFixed(1) : '0.0';
+
+  document.getElementById('discountCallout').innerHTML = `
+    <div class="callout-title" style="color:var(--blue)">50% CGT Discount Method</div>
+    <div class="callout-value" style="color:var(--blue)">${fmt(r.discNet)}</div>
+    <div class="callout-sub">after-tax sale proceeds</div>
+    <div style="margin-top:14px;font-size:12px;font-family:'DM Mono',monospace;color:var(--muted);line-height:1.8">
+      Sale price${' '.repeat(20)}<span style="color:var(--text);float:right">${fmt(sale)}</span><br>
+      Cost base${' '.repeat(22)}<span style="color:var(--text);float:right">${fmt(cost)}</span><br>
+      Nominal gain${' '.repeat(19)}<span style="color:var(--text);float:right">${fmt(r.nominalGain)}</span><br>
+      Discount (${(r.disc*100).toFixed(0)}%)${' '.repeat(18)}<span style="color:var(--green);float:right">−${fmt(r.nominalGain * r.disc)}</span><br>
+      Taxable gain${' '.repeat(19)}<span style="color:var(--text);float:right">${fmt(r.discTaxable)}</span><br>
+      Tax @ ${(r.mtr*100).toFixed(0)}%${' '.repeat(23)}<span style="color:var(--red);float:right">${fmt(r.discTax)}</span><br>
+      <span style="color:var(--muted)">Effective tax on gain: ${discPct}%</span>
+    </div>`;
+
+  document.getElementById('indexCallout').innerHTML = `
+    <div class="callout-title" style="color:var(--gold)">Indexation Method (new rules)</div>
+    <div class="callout-value" style="color:var(--gold)">${fmt(r.indexNet)}</div>
+    <div class="callout-sub">after-tax sale proceeds</div>
+    <div style="margin-top:14px;font-size:12px;font-family:'DM Mono',monospace;color:var(--muted);line-height:1.8">
+      Sale price${' '.repeat(20)}<span style="color:var(--text);float:right">${fmt(sale)}</span><br>
+      Cost base${' '.repeat(22)}<span style="color:var(--text);float:right">${fmt(cost)}</span><br>
+      Indexed cost (×${Math.pow(1+cpi/100, years).toFixed(3)})<span style="color:var(--text);float:right">${fmt(r.indexedCost)}</span><br>
+      Indexed gain${' '.repeat(19)}<span style="color:var(--text);float:right">${fmt(r.indexedGain)}</span><br>
+      Tax @ ${(r.mtr*100).toFixed(0)}%${' '.repeat(23)}<span style="color:var(--red);float:right">${fmt(r.indexTax)}</span><br>
+      <span style="color:var(--muted)">Effective tax on gain: ${indexPct}%</span>
+    </div>`;
+
+  // Chart: after-tax net by hold years (1..30) using current sale price as terminal value
+  const maxYears = 30;
+  const xs = [], discNets = [], indexNets = [];
+  for (let y = 1; y <= maxYears; y++) {
+    const rr = compute(cost, sale, y, cpi, mtr, assetType);
+    xs.push(y);
+    discNets.push(Math.round(rr.discNet));
+    indexNets.push(Math.round(rr.indexNet));
+  }
+
+  const cfg = {
+    type: 'line',
+    data: { labels: xs.map(String), datasets: [
+      { label: '50% Discount — net', data: discNets, borderColor: '#58a6ff', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
+      { label: 'Indexation — net',   data: indexNets, borderColor: '#d29922', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
+    ]},
+    options: {
+      responsive: true, animation: false, interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#7d8590', font: { family: 'DM Sans', size: 12 }, boxWidth: 20 } },
+        tooltip: { backgroundColor: '#0d1117', borderColor: '#21262d', borderWidth: 1, titleColor: '#7d8590', bodyColor: '#e6edf3',
+          callbacks: { title: c => 'Hold ' + c[0].label + ' years', label: c => ' ' + c.dataset.label + ': $' + c.parsed.y.toLocaleString() } }
+      },
+      scales: {
+        x: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 } }, grid: { color: '#21262d' }, title: { display: true, text: 'Hold Period (years)', color: '#7d8590', font: { family: 'DM Sans', size: 11 } } },
+        y: { ticks: { color: '#7d8590', font: { family: 'DM Mono', size: 10 }, callback: v => '$' + (v >= 1000000 ? (v/1000000).toFixed(1)+'M' : (v/1000).toFixed(0)+'k') }, grid: { color: '#21262d' } }
+      }
+    }
+  };
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('myChart'), cfg);
+
+  // Table — selected hold periods
+  const tableYears = [1,2,3,5,7,10,15,20,25,30].filter(y => y <= 50);
+  if (!tableYears.includes(years)) tableYears.push(years);
+  tableYears.sort((a,b) => a-b);
+  document.getElementById('tableBody').innerHTML = tableYears.map(y => {
+    const rr = compute(cost, sale, y, cpi, mtr, assetType);
+    const better = rr.discNet >= rr.indexNet ? 'Discount' : 'Indexation';
+    const betterColor = rr.discNet >= rr.indexNet ? 'var(--blue)' : 'var(--gold)';
+    const isCurrent = y === years;
+    return `<tr${isCurrent ? ' class="highlight"' : ''}>
+      <td>${y}${isCurrent ? ' ◀' : ''}</td>
+      <td>${fmt(rr.nominalGain)}</td>
+      <td style="color:var(--blue)">${fmt(rr.discTax)}</td>
+      <td style="color:var(--blue);font-weight:600">${fmt(rr.discNet)}</td>
+      <td style="color:var(--gold)">${fmt(rr.indexedCost)}</td>
+      <td style="color:var(--gold)">${fmt(rr.indexTax)}</td>
+      <td style="color:var(--gold);font-weight:600">${fmt(rr.indexNet)}</td>
+      <td style="color:${betterColor};font-weight:600">${better}</td>
+    </tr>`;
+  }).join('');
+}
+
+IDS.forEach(id => document.getElementById(id).addEventListener('input', () => { save(); render(); }));
+document.getElementById('resetBtn').addEventListener('click', () => { if (!confirm('Reset?')) return; localStorage.removeItem(STORAGE_KEY); applyState(DEFAULTS); render(); });
+applyState(load() || DEFAULTS); render();
+</script>
+<script>FinanceNav.init({ toolName: 'CGT Discount vs. Indexation', cloudKey: 'cgt-calculator', onCloudLoad: function(d) { applyState(d); render(); } });</script>
+</body>
+</html>

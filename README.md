@@ -31,6 +31,7 @@ A suite of open-source personal finance calculators built for Australians. No fr
 |------|-------------|
 | [FIRE Timeline](https://bstillitano.github.io/finance-toolkit/fire-timeline.html) | Calculate your path to financial independence using the 4% rule. Shows FI date, post-retirement portfolio longevity, and year-by-year net worth vs. target. |
 | [Salary & Tax Optimiser](https://bstillitano.github.io/finance-toolkit/salary-tax.html) | Model take-home pay under different super contribution levels and salary sacrifice strategies. Based on 2024–25 Australian tax rates including Medicare levy and HELP repayments. |
+| [CGT Discount vs. Indexation](https://bstillitano.github.io/finance-toolkit/cgt-calculator.html) | Compare after-tax proceeds on an asset sale under the 50% CGT discount method and the new CPI-indexed cost base method. Shows break-even inflation and supports individual, SMSF, and company structures. |
 
 ---
 
